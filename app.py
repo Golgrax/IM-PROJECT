@@ -1,27 +1,30 @@
 import customtkinter as ctk
 from PIL import Image
-#import mysql.connector
-#from mysql.connector import Error pangabang para sa pag combine ng database
+from db_connector import DBManager
 
 class ProjectorReservationSystem:
-    def __init__(self, root):
+    def __init__(self, root, db_manager):
         self.root = root
+        self.db = db_manager
+
         self.root.title("Projector Reservation System")
         self.root.geometry("1000x600")
         self.root.configure(bg="#800000")
         self.root.resizable(True, True)
 
         ctk.set_appearance_mode("dark")
+        image_path = "./IMAGE/PUP_LOGO.png"
+        try:
+            self.original_image = Image.open(image_path)
+        except FileNotFoundError:
+            print(f"Warning: Background image not found at {image_path}. Displaying without image.")
+            self.original_image = None
 
-        # Load background image
-        image_path = r"C:\Users\Desktop\Downloads\IM PROJECT\IMAGE\PUP_LOGO.png"  # Adjust this path
-        self.original_image = Image.open(image_path)
         self.bg_label = ctk.CTkLabel(root, text="")
         self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
         self.root.after(100, self.update_background)
         self.root.bind("<Configure>", self.on_resize)
 
-        # Start with login screen
         self.create_login_frame()
 
     def on_resize(self, event):
@@ -31,13 +34,14 @@ class ProjectorReservationSystem:
     def update_background(self):
         width = self.root.winfo_width()
         height = self.root.winfo_height()
-        if width > 1 and height > 1:
+        if width > 1 and height > 1 and self.original_image:
             resized_image = self.original_image.resize((width, height), Image.LANCZOS)
             self.bg_image = ctk.CTkImage(light_image=resized_image, dark_image=resized_image, size=(width, height))
             self.bg_label.configure(image=self.bg_image)
+        elif not self.original_image:
+            self.bg_label.configure(fg_color="#800000")
 
     def create_login_frame(self):
-        # Remove any existing widgets except the background
         for widget in self.root.winfo_children():
             if widget != self.bg_label:
                 widget.destroy()
@@ -108,11 +112,12 @@ class ProjectorReservationSystem:
         )
         self.welcome_label.pack(padx=20, pady=40)
 
-        # After 2 seconds, transition to main interface
         self.root.after(2000, self.show_main_interface)
 
     def show_main_interface(self):
-        self.dashboard.destroy()
+        if self.dashboard:
+            self.dashboard.destroy()
+            self.dashboard = None
 
         self.main_frame = ctk.CTkFrame(self.root, fg_color="white", corner_radius=15)
         self.main_frame.pack(expand=True, fill="both", padx=30, pady=30)
@@ -142,6 +147,9 @@ class ProjectorReservationSystem:
         self.table_frame = ctk.CTkFrame(self.main_frame, fg_color="white", border_width=2, corner_radius=10)
         self.table_frame.pack(padx=20, pady=20, fill="x")
 
+        for widget in self.table_frame.winfo_children():
+            widget.destroy()
+
         for col_index, header in enumerate(headers):
             ctk.CTkLabel(
                 self.table_frame,
@@ -153,18 +161,11 @@ class ProjectorReservationSystem:
                 height=30
             ).grid(row=0, column=col_index, padx=1, pady=1, sticky="nsew")
 
-        # Placeholder rows; will be updated when "VIEW" is clicked
-        for i in range(10):
+        for i in range(5):
             for col in range(len(headers)):
-                if col == 0:
-                    text = f"P{str(i + 1).zfill(3)}"
-                elif col == 6:
-                    text = "Available" if i % 2 == 0 else "Not Available"
-                else:
-                    text = ""
                 ctk.CTkLabel(
                     self.table_frame,
-                    text=text,
+                    text="",
                     font=("Arial", 13),
                     text_color="black",
                     width=120,
@@ -172,8 +173,43 @@ class ProjectorReservationSystem:
                     fg_color="white"
                 ).grid(row=i + 1, column=col, padx=1, pady=1, sticky="nsew")
 
+
         for col in range(len(headers)):
             self.table_frame.grid_columnconfigure(col, weight=1)
+
+    def populate_table_with_data(self, data_rows):
+        """Populates the main interface table with data from the database."""
+        for widget in self.table_frame.winfo_children():
+            if widget.grid_info()['row'] > 0:
+                widget.destroy()
+
+        headers = ["PR. NO.", "SERIAL NO.", "TIME", "PROFESSOR", "SECTION", "REPRESENTATIVE", "STATUS"]
+        for row_index, row_data in enumerate(data_rows, start=1):
+            for col_index, cell in enumerate(row_data):
+                ctk.CTkLabel(
+                    self.table_frame,
+                    text=str(cell),
+                    font=("Arial", 13),
+                    text_color="black",
+                    width=120,
+                    height=30,
+                    fg_color="white"
+                ).grid(row=row_index, column=col_index, padx=1, pady=1, sticky="nsew")
+
+        num_data_rows = len(data_rows)
+        if num_data_rows < 5:
+            for i in range(num_data_rows, 5):
+                for col in range(len(headers)):
+                    ctk.CTkLabel(
+                        self.table_frame,
+                        text="",
+                        font=("Arial", 13),
+                        text_color="black",
+                        width=120,
+                        height=30,
+                        fg_color="white"
+                    ).grid(row=i + 1, column=col, padx=1, pady=1, sticky="nsew")
+
 
     def create_buttons(self):
         button_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
@@ -216,41 +252,20 @@ class ProjectorReservationSystem:
             **button_style
         ).grid(row=0, column=3, padx=10, pady=5)
 
-    #  DATABASE CONNECTION HELPER
-    
-    def get_db_connection(self):
-        """
-        Adjust host, user, password, database as needed.
-        """
-        try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",           # ← your DB user
-                password="",           # ← your DB password
-                database="reservationprojector"
-            )
-            return conn
-        except OSError as e:
-            print(f"Error connecting to database: {e}")
-            return None
-
-
-    #  ADD BUTTON → OPEN FORM TO INSERT A NEW RECORD
-   
     def open_add_window(self):
         add_window = ctk.CTkToplevel(self.root)
         add_window.title("Add Projector Reservation")
-        add_window.geometry("400x450")
+        add_window.geometry("400x300")
         add_window.configure(fg_color="white")
+        add_window.grab_set()
 
         ctk.CTkLabel(
             add_window,
-            text="Add Projector Reservation",
+            text="Add New Projector",
             font=("Arial", 16, "bold"),
             text_color="black"
         ).pack(pady=10)
 
-        # Fields: PR_NO, SERIAL_NO, TIME, PROFESSOR, SECTION, REPRESENTATIVE
         self.add_entries = {}
         fields = [
             ("PR. NO.",  "pr_no"),
@@ -264,56 +279,38 @@ class ProjectorReservationSystem:
             entry.pack(padx=20)
             self.add_entries[key] = entry
 
-        # Save button
         ctk.CTkButton(
             add_window,
             text="Save",
             fg_color="#800000",
             text_color="white",
-            command=self.save_new_entry
+            command=lambda: self.save_new_entry(add_window)
         ).pack(pady=20)
 
-    def save_new_entry(self):
-        data = {key: entry.get().strip() for key, entry in self.add_entries.items()}
+    def save_new_entry(self, add_window):
+        pr_no = self.add_entries["pr_no"].get().strip()
+        serial_no = self.add_entries["serial_no"].get().strip()
 
-        # Basic validation: ensure PR_NO and Serial No. are provided
-        if not data["pr_no"] or not data["serial_no"]:
-            print("PR_NO and Serial No. are required.")
+        if not pr_no or not serial_no:
+            print("PR. NO. and Serial No. are required.")
+            ctk.CTkMessagebox.showerror("Input Error", "PR. NO. and Serial No. are required.")
             return
 
-        conn = self.get_db_connection()
-        if conn is None:
-            return
+        if self.db.add_projector_entry(pr_no, serial_no):
+            print(f"New projector {pr_no} added successfully.")
+            ctk.CTkMessagebox.showinfo("Success", f"Projector {pr_no} added successfully.")
+            add_window.destroy()
+            self.open_view_window()
+        else:
+            print(f"Failed to add projector {pr_no}.")
+            ctk.CTkMessagebox.showerror("Database Error", "Failed to add projector. Check database connection or if PR. NO. already exists.")
 
-        try:
-            cursor = conn.cursor()
-            query = """
-                INSERT INTO projector_reservation
-                (PR_NO, SERIAL_NO, TIME, PROFESSOR, SECTION, REPRESENTATIVE, STATUS)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            values = (
-                data["pr_no"],
-                data["serial_no"],
-        
-            )
-            cursor.execute(query, values)
-            conn.commit()
-            print("New reservation added:", data["pr_no"])
-        except OSError as e:
-            print(f"Error inserting new entry: {e}")
-        finally:
-            cursor.close()
-            conn.close()
-
-
-    #  RESERVATION BUTTON → PICK AN AVAILABLE PROJECTOR AND FILL DETAILS
-   
     def open_reservation_window(self):
         res_window = ctk.CTkToplevel(self.root)
         res_window.title("Make a Reservation")
         res_window.geometry("400x450")
         res_window.configure(fg_color="white")
+        res_window.grab_set()
 
         ctk.CTkLabel(
             res_window,
@@ -322,26 +319,16 @@ class ProjectorReservationSystem:
             text_color="black"
         ).pack(pady=10)
 
-        # Fetch list of PR_NO for which status = 'Available'
-        conn = self.get_db_connection()
-        available_list = []
-        if conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT PR_NO FROM projector_reservation WHERE STATUS = 'Available'")
-                available_list = [row[0] for row in cursor.fetchall()]
-            except Error as e:
-                print(f"Error fetching available projectors: {e}")
-            finally:
-                cursor.close()
-                conn.close()
+        available_list = self.db.get_available_projector_nos()
+        if not available_list:
+            ctk.CTkLabel(res_window, text="No available projectors found.", text_color="red").pack(pady=10)
+            return
 
         ctk.CTkLabel(res_window, text="Select Projector (PR. NO.):", text_color="black", anchor="w", font=("Arial", 12)
                      ).pack(pady=(10, 0), padx=20, anchor="w")
         self.res_pr_dropdown = ctk.CTkOptionMenu(res_window, values=available_list, width=200)
         self.res_pr_dropdown.pack(pady=(5, 15))
 
-        # Other fields: Time, Professor, Section, Representative
         self.res_entries = {}
         fields = [
             ("Time", "time_slot"),
@@ -361,58 +348,36 @@ class ProjectorReservationSystem:
             text="Submit Reservation",
             fg_color="#800000",
             text_color="white",
-            command=self.submit_reservation
+            command=lambda: self.submit_reservation(res_window)
         ).pack(pady=20)
 
-    def submit_reservation(self):
+    def submit_reservation(self, res_window):
         pr_no = self.res_pr_dropdown.get()
-        data = {key: entry.get().strip() for key, entry in self.res_entries.items()}
+        time_slot = self.res_entries["time_slot"].get().strip()
+        professor = self.res_entries["professor"].get().strip()
+        section = self.res_entries["section"].get().strip()
+        representative = self.res_entries["representative"].get().strip()
 
-        if not pr_no:
-            print("Please select a projector.")
-            return
-        if not data["time_slot"] or not data["professor"] or not data["section"] or not data["representative"]:
-            print("All fields are required.")
-            return
-
-        conn = self.get_db_connection()
-        if conn is None:
+        if not all([pr_no, time_slot, professor, section, representative]):
+            print("All fields are required for reservation.")
+            ctk.CTkMessagebox.showerror("Input Error", "All fields are required for reservation.")
             return
 
-        try:
-            cursor = conn.cursor()
-            query = """
-                UPDATE projector_reservation
-                SET TIME = %s,
-                    PROFESSOR = %s,
-                    SECTION = %s,
-                    REPRESENTATIVE = %s,
-                    STATUS = 'Not Available'
-                WHERE PR_NO = %s
-            """
-            values = (
-                data["time_slot"],
-                data["professor"],
-                data["section"],
-                data["representative"],
-                pr_no
-            )
-            cursor.execute(query, values)
-            conn.commit()
+        if self.db.update_reservation_details(pr_no, time_slot, professor, section, representative):
             print(f"Projector {pr_no} reserved successfully.")
-        except OSError as e:
-            print(f"Error updating reservation: {e}")
-        finally:
-            cursor.close()
-            conn.close()
+            ctk.CTkMessagebox.showinfo("Success", f"Projector {pr_no} reserved successfully.")
+            res_window.destroy()
+            self.open_view_window()
+        else:
+            print(f"Failed to reserve projector {pr_no}.")
+            ctk.CTkMessagebox.showerror("Database Error", "Failed to reserve projector.")
 
-    #  CANCELLATION BUTTON → CHOOSE A RESERVED PROJECTOR TO CANCEL
- 
     def open_cancellation_window(self):
         cancel_window = ctk.CTkToplevel(self.root)
         cancel_window.title("Cancel Reservation")
         cancel_window.geometry("350x250")
         cancel_window.configure(fg_color="white")
+        cancel_window.grab_set()
 
         ctk.CTkLabel(
             cancel_window,
@@ -421,19 +386,10 @@ class ProjectorReservationSystem:
             text_color="black"
         ).pack(pady=10)
 
-        # Fetch list of PR_NO where status = 'Not Available'
-        conn = self.get_db_connection()
-        reserved_list = []
-        if conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT PR_NO FROM projector_reservation WHERE STATUS = 'Not Available'")
-                reserved_list = [row[0] for row in cursor.fetchall()]
-            except Error as e:
-                print(f"Error fetching reserved projectors: {e}")
-            finally:
-                cursor.close()
-                conn.close()
+        reserved_list = self.db.get_reserved_projector_nos()
+        if not reserved_list:
+            ctk.CTkLabel(cancel_window, text="No reserved projectors found.", text_color="red").pack(pady=10)
+            return
 
         ctk.CTkLabel(cancel_window, text="Select Projector (PR. NO.):", text_color="black", anchor="w", font=("Arial", 12)
                      ).pack(pady=(10, 0), padx=20, anchor="w")
@@ -445,106 +401,31 @@ class ProjectorReservationSystem:
             text="Cancel Reservation",
             fg_color="#800000",
             text_color="white",
-            command=self.submit_cancellation
+            command=lambda: self.submit_cancellation(cancel_window)
         ).pack(pady=20)
 
-    def submit_cancellation(self):
+    def submit_cancellation(self, cancel_window):
         pr_no = self.cancel_pr_dropdown.get()
         if not pr_no:
             print("Please select a projector to cancel.")
+            ctk.CTkMessagebox.showerror("Input Error", "Please select a projector to cancel.")
             return
 
-        conn = self.get_db_connection()
-        if conn is None:
-            return
-
-        try:
-            cursor = conn.cursor()
-            query = """
-                UPDATE projector_reservation
-                SET STATUS = 'Available',
-                    PROFESSOR = '',
-                    SECTION = '',
-                    REPRESENTATIVE = '',
-                    TIME = ''
-                WHERE PR_NO = %s
-            """
-            cursor.execute(query, (pr_no,))
-            conn.commit()
+        if self.db.cancel_projector_reservation(pr_no):
             print(f"Reservation for {pr_no} has been cancelled.")
-        except OSError as e:
-            print(f"Error cancelling reservation: {e}")
-        finally:
-            cursor.close()
-            conn.close()
-
-    #  VIEW BUTTON → SHOW ALL RESERVATIONS IN A TABLE
+            ctk.CTkMessagebox.showinfo("Success", f"Reservation for {pr_no} has been cancelled.")
+            cancel_window.destroy()
+            self.open_view_window()
+        else:
+            print(f"Failed to cancel reservation for {pr_no}.")
+            ctk.CTkMessagebox.showerror("Database Error", "Failed to cancel reservation.")
 
     def open_view_window(self):
-        view_window = ctk.CTkToplevel(self.root)
-        view_window.title("View Reservations")
-        view_window.geometry("800x500")
-        view_window.configure(fg_color="white")
 
-        ctk.CTkLabel(
-            view_window,
-            text="All Projector Reservations",
-            font=("Arial", 16, "bold"),
-            text_color="black"
-        ).pack(pady=10)
-
-        # Frame to hold the data table
-        table_container = ctk.CTkFrame(view_window, fg_color="white", border_width=1, corner_radius=10)
-        table_container.pack(padx=20, pady=10, fill="both", expand=True)
-
-        # Headers
-        headers = ["PR. NO.", "SERIAL NO.", "TIME", "PROFESSOR", "SECTION", "REPRESENTATIVE", "STATUS"]
-        for col_index, header in enumerate(headers):
-            ctk.CTkLabel(
-                table_container,
-                text=header,
-                font=("Arial", 14, "bold"),
-                text_color="black",
-                fg_color="#e6e6e6",
-                width=110,
-                height=30
-            ).grid(row=0, column=col_index, padx=1, pady=1, sticky="nsew")
-
-        # Fetch all records
-        conn = self.get_db_connection()
-        if conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT PR_NO, SERIAL_NO, TIME, PROFESSOR, SECTION, REPRESENTATIVE, STATUS FROM projector_reservation")
-                rows = cursor.fetchall()
-            except Error as e:
-                print(f"Error fetching reservations: {e}")
-                rows = []
-            finally:
-                cursor.close()
-                conn.close()
+        all_reservations = self.db.get_all_reservations()
+        if all_reservations:
+            self.populate_table_with_data(all_reservations)
+            print("Main table refreshed with current data.")
         else:
-            rows = []
-
-        # Populate rows
-        for row_index, row_data in enumerate(rows, start=1):
-            for col_index, cell in enumerate(row_data):
-                ctk.CTkLabel(
-                    table_container,
-                    text=str(cell),
-                    font=("Arial", 13),
-                    text_color="black",
-                    fg_color="white",
-                    width=110,
-                    height=30
-                ).grid(row=row_index, column=col_index, padx=1, pady=1, sticky="nsew")
-
-        # Make columns expand evenly
-        for col_index in range(len(headers)):
-            table_container.grid_columnconfigure(col_index, weight=1)
-
-
-if __name__ == "__main__":
-    root = ctk.CTk()
-    app = ProjectorReservationSystem(root)
-    root.mainloop()
+            self.populate_table_with_data([])
+            print("No reservations found to display.")
