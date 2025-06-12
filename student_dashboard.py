@@ -2,10 +2,10 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
 from datetime import date, datetime
-import mysql.connector # Added: Import mysql.connector
+import mysql.connector
 
-def open_student_dashboard(student_name):
-    student_win = tk.Tk()
+def open_student_dashboard(student_name, login_window):
+    student_win = tk.Toplevel(login_window)
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
     student_win.configure(bg="#F0F0F0")
@@ -31,7 +31,6 @@ def open_student_dashboard(student_name):
     notebook = ttk.Notebook(student_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
 
-    # TAB 1: Make a Reservation
     tab_reserve = ttk.Frame(notebook, padding="15")
     notebook.add(tab_reserve, text=" Make a Reservation ")
 
@@ -41,7 +40,6 @@ def open_student_dashboard(student_name):
     form_labels = ["Select Projector", "Professor Name", "Date (YYYY-MM-DD)", "Start Time (HH:MM)", "End Time (HH:MM)", "Purpose"]
     form_entries = {}
 
-    # Projector Dropdown
     ttk.Label(reserve_frame, text="Select Projector:").pack(anchor="w", padx=10, pady=(10, 0))
     projector_combo = ttk.Combobox(reserve_frame, state="readonly", width=42, font=("Arial", 10))
     project_options = []
@@ -52,7 +50,7 @@ def open_student_dashboard(student_name):
             cursor.execute("SELECT projector_id, projector_name FROM projectors WHERE status = 'Available'")
             projectors = cursor.fetchall()
             projector_combo['values'] = [f"{p[0]} - {p[1]}" for p in projectors]
-            project_options = projectors # Store for later use if needed
+            project_options = projectors
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -61,7 +59,6 @@ def open_student_dashboard(student_name):
     projector_combo.pack(padx=10, pady=5)
     form_entries["projector_combo"] = projector_combo
 
-    # Other Entries
     entry_fields = {
         "professor_name": "Professor Name",
         "date_reserved": "Date (YYYY-MM-DD)",
@@ -122,10 +119,10 @@ def open_student_dashboard(student_name):
 
             messagebox.showinfo("Success", "Reservation submitted! Awaiting admin approval.")
             for key in entry_fields:
-                if key != "date_reserved": # Don't clear date
+                if key != "date_reserved":
                     form_entries[key].delete(0, tk.END)
-            form_entries["projector_combo"].set('') # Clear dropdown selection
-            load_reservations() # Reload student's reservations table
+            form_entries["projector_combo"].set('')
+            load_reservations()
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -134,7 +131,6 @@ def open_student_dashboard(student_name):
 
     ttk.Button(reserve_frame, text="Submit Reservation", command=submit_reservation, style="Accent.TButton").pack(pady=15)
 
-    # TAB 2: View My Reservations
     tab_view = ttk.Frame(notebook, padding="15")
     notebook.add(tab_view, text="My Reservations")
 
@@ -200,14 +196,11 @@ def open_student_dashboard(student_name):
         if not db: return
         cursor = db.cursor()
         try:
-            # Get projector_id associated with this reservation
             cursor.execute("SELECT projector_id FROM reservations WHERE reservation_id = %s", (res_id,))
             proj_id_result = cursor.fetchone()
 
-            # Delete the reservation
             cursor.execute("DELETE FROM reservations WHERE reservation_id = %s", (res_id,))
 
-            # If the reservation was approved, update projector status back to Available
             if current_status == 'Approved' and proj_id_result:
                 proj_id = proj_id_result[0]
                 cursor.execute("UPDATE projectors SET status = 'Available' WHERE projector_id = %s", (proj_id,))
@@ -226,8 +219,8 @@ def open_student_dashboard(student_name):
     def logout():
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             student_win.destroy()
+            login_window.deiconify()
 
     ttk.Button(student_win, text="Logout", command=logout, style="Dark.TButton").pack(pady=10)
 
     load_reservations()
-    student_win.mainloop()
