@@ -5,7 +5,10 @@ from db_connector import connect_db
 def open_admin_dashboard(admin_name):
     admin_win = tk.Tk()
     admin_win.title("Admin Dashboard")
-    admin_win.state('zoomed')
+    admin_win.state('normal')
+    screen_width = admin_win.winfo_screenwidth()
+    screen_height = admin_win.winfo_screenheight()
+    admin_win.geometry(f"{screen_width}x{screen_height}+0+0")
     admin_win.configure(bg="#F0F0F0")
 
     style = ttk.Style()
