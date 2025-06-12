@@ -15,14 +15,11 @@ def open_admin_dashboard(admin_name):
     base_path = os.path.dirname(os.path.abspath(__file__))
     bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
-    bg_label = None
+    bg_label = None # Initialize to None for error handling
     try:
         admin_win.original_bg_image = Image.open(bg_image_path) # Store original image on window
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-        # Crucial for image persistence: also store the PhotoImage on the Label directly
-        # This creates a strong reference that Tkinter/Python will respect
-        admin_win.bg_photo_image = None # Initialize a dummy
     except FileNotFoundError:
         admin_win.configure(bg="#800000") # Fallback to PUP maroon if image missing
 
@@ -34,64 +31,68 @@ def open_admin_dashboard(admin_name):
                 resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 temp_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=temp_photo_image)
-                bg_label.image = temp_photo_image # KEEP THIS REFERENCE
-                # Also, store it on the main window just in case, or as a double safeguard
-                admin_win.bg_photo_image = temp_photo_image
-
+                bg_label.image = temp_photo_image # Crucial for persistent reference
+                # No need for admin_win.bg_photo_image = temp_photo_image if bg_label.image is enough
 
     admin_win.bind('<Configure>', update_background_image)
-    # Give Tkinter a moment to draw the window before updating the image
-    admin_win.after(50, update_background_image) # Shorter delay for quicker appearance
+    admin_win.after(50, update_background_image) # Initial call with slight delay
 
 
-    # --- Main Layout Frame (using tk.Frame, not ttk.Frame) ---
-    # This frame holds the canvas + scrollbars and the bottom control frame
-    # Its background should be a color that harmonizes with the image, not "transparent".
-    main_layout_frame = tk.Frame(admin_win, bg="#F0F0F0") # Use a light gray, will be updated by theme
-    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20) # Add some padding from window edges
-    main_layout_frame.grid_rowconfigure(0, weight=1)
-    main_layout_frame.grid_columnconfigure(0, weight=1)
+    # --- Main Layout Frame (tk.Frame - sits over the background image) ---
+    main_layout_frame = tk.Frame(admin_win, bg="#F0F0F0") # Default light background
+    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20) # Padding from window edges
+    main_layout_frame.grid_rowconfigure(0, weight=1) # Canvas row expands vertically
+    main_layout_frame.grid_columnconfigure(0, weight=1) # Canvas column expands horizontally
 
     # --- Scrollable Content Setup ---
-    # Use a tk.Canvas as the scrollable viewport. Its background will be updated by theme.
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="white") # Initial white
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="#F0F0F0") # Default light background
     main_canvas.grid(row=0, column=0, sticky="nsew")
 
     v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
-    h_scrollbar = ttk.Scrollbar(main_layout_frame, orient="horizontal", command=main_canvas.xview)
-    v_scrollbar.grid(row=0, column=1, sticky="ns")
-    h_scrollbar.grid(row=1, column=0, sticky="ew")
+    v_scrollbar.grid(row=0, column=1, sticky="ns") # Vertical scrollbar always present
 
-    main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+    # Horizontal scrollbar removed/disabled by default
+    # If horizontal scrolling is truly needed for tables etc., you'd bind main_canvas.xview
+    # and use h_scrollbar.grid, but often it's better to make content fit or resize tables.
+    main_canvas.configure(yscrollcommand=v_scrollbar.set) # Only vertical scroll
 
-    # Create a tk.Frame to put all content inside the canvas
-    # REMOVED 'padding' as tk.Frame does not support it
-    scrollable_content_frame = tk.Frame(main_canvas, bg="white") # Initial white
-    main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
+    # Create a tk.Frame inside the canvas for all content
+    # It must have a fixed width for horizontal centering
+    SCROLL_CONTENT_WIDTH = 1000 # Define a fixed width for the scrollable content area
+    scrollable_content_frame = tk.Frame(main_canvas, bg="white", width=SCROLL_CONTENT_WIDTH)
+    scrollable_content_frame.pack_propagate(False) # Prevent frame from resizing to content
+    scrollable_content_frame.bind("<Configure>", lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all"))) # Update scrollregion
 
-    def on_frame_configure(event):
+    # Create window in canvas for the content frame, centered horizontally
+    # Anchor 'n' (north) aligns top-center of the window to the canvas position
+    main_canvas.create_window((main_canvas.winfo_width() / 2, 0), window=scrollable_content_frame, anchor="n")
+
+    # Function to reposition content frame if canvas width changes
+    def center_scrollable_content(event=None):
+        main_canvas.coords(scrollable_content_frame, main_canvas.winfo_width() / 2, 0)
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
-        # Ensure scrollable_content_frame expands horizontally to fill canvas width
-        main_canvas.itemconfig(main_canvas.winfo_children()[0], width=main_canvas.winfo_width())
 
-    scrollable_content_frame.bind("<Configure>", on_frame_configure)
+    main_canvas.bind('<Configure>', center_scrollable_content) # Bind to canvas resize
 
+
+    # Mouse wheel scrolling
     def _on_mouse_wheel(event):
         if event.num == 4 or event.delta > 0:
             main_canvas.yview_scroll(-1, "units")
         elif event.num == 5 or event.delta < 0:
             main_canvas.yview_scroll(1, "units")
-    main_canvas.bind_all("<Button-4>", _on_mouse_wheel) # Linux wheel up
-    main_canvas.bind_all("<Button-5>", _on_mouse_wheel) # Linux wheel down
-    main_canvas.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
+    admin_win.bind_all("<Button-4>", _on_mouse_wheel) # Linux wheel up
+    admin_win.bind_all("<Button-5>", _on_mouse_wheel) # Linux wheel down
+    admin_win.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
 
 
     # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
+    # Add padding to elements packed within scrollable_content_frame to create internal spacing
     welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
-    welcome_label.pack(pady=20)
+    welcome_label.pack(pady=20, padx=20) # Added padx
 
     add_frame = ttk.LabelFrame(scrollable_content_frame, text="Add New Projector", padding="10")
-    add_frame.pack(fill="x", pady=10)
+    add_frame.pack(fill="x", pady=10, padx=20) # Added padx
 
     ttk.Label(add_frame, text="Projector Name:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
     proj_name_entry = ttk.Entry(add_frame, width=40)
@@ -104,11 +105,9 @@ def open_admin_dashboard(admin_name):
     def add_projector():
         proj_name = proj_name_entry.get().strip()
         model = model_entry.get().strip()
-
         if not proj_name or not model:
             messagebox.showwarning("Input Error", "Please fill in all fields.")
             return
-
         db = connect_db()
         if not db: return
         cursor = db.cursor()
@@ -131,7 +130,7 @@ def open_admin_dashboard(admin_name):
     ttk.Button(add_frame, text="Add Projector", command=add_projector, style="Accent.TButton").grid(row=2, column=0, columnspan=2, pady=10)
 
     pending_frame = ttk.LabelFrame(scrollable_content_frame, text="Pending & Approved Reservations", padding="10")
-    pending_frame.pack(fill="both", expand=True, pady=10)
+    pending_frame.pack(fill="both", expand=True, pady=10, padx=20) # Added padx
 
     cols = ("Reservation ID", "Student Name", "Projector", "Professor", "Date", "Start", "End", "Purpose", "Status")
     tree = ttk.Treeview(pending_frame, columns=cols, show='headings')
@@ -166,7 +165,7 @@ def open_admin_dashboard(admin_name):
             db.close()
 
     btn_frame = ttk.Frame(scrollable_content_frame, padding="5")
-    btn_frame.pack(pady=5)
+    btn_frame.pack(pady=5, padx=20) # Added padx
 
     def update_reservation_status(new_status):
         selected = tree.selection()
@@ -213,7 +212,7 @@ def open_admin_dashboard(admin_name):
     ttk.Button(btn_frame, text="Reject", command=lambda: update_reservation_status("Rejected"), style="Danger.TButton", width=15).pack(side="left", padx=10)
 
     projector_frame = ttk.LabelFrame(scrollable_content_frame, text="Projector List", padding="10")
-    projector_frame.pack(fill="both", expand=True, pady=10)
+    projector_frame.pack(fill="both", expand=True, pady=10, padx=20) # Added padx
 
     proj_cols = ("Projector ID", "Name", "Model", "Status")
     proj_tree = ttk.Treeview(projector_frame, columns=proj_cols, show='headings')
@@ -240,7 +239,7 @@ def open_admin_dashboard(admin_name):
             db.close()
 
     manage_proj_status_frame = ttk.LabelFrame(scrollable_content_frame, text="Manage Projector Status", padding="10")
-    manage_proj_status_frame.pack(fill="x", pady=10)
+    manage_proj_status_frame.pack(fill="x", pady=10, padx=20) # Added padx
 
     ttk.Label(manage_proj_status_frame, text="Select new status:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
     proj_status_combo = ttk.Combobox(manage_proj_status_frame, state="readonly", width=20, font=("Arial", 10))
@@ -307,7 +306,7 @@ def open_admin_dashboard(admin_name):
 
         # PUP Theme Colors
         if mode == 'dark':
-            root_bg = "#333333"
+            root_bg = "#333333" # General dark background for window if no image
             frame_bg = "#3A3A3A" # Dark grey for main content frames (simulates slight transparency)
             label_frame_bg = "#555555" # Darker grey for labelframes
             fg_color = "white"
@@ -329,7 +328,7 @@ def open_admin_dashboard(admin_name):
             treeview_bg = "white"
             treeview_fg = "black"
             treeview_selected = "#ADD8E6"
-            accent_button_bg = "#800000"
+            accent_button_bg = "#800000" # PUP Maroon for accents
             accent_button_fg = "white"
             danger_button_bg = "#f44336"
             dark_button_bg = "#555555"

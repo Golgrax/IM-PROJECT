@@ -30,51 +30,59 @@ def open_student_dashboard(student_name):
             height = student_win.winfo_height()
             if width > 0 and height > 0:
                 resized_image = student_win.original_bg_image.resize((width, height), Image.LANCZOS)
-                student_win.bg_photo_image = ImageTk.PhotoImage(resized_image)
-                bg_label.configure(image=student_win.bg_photo_image)
+                temp_photo_image = ImageTk.PhotoImage(resized_image)
+                bg_label.configure(image=temp_photo_image)
+                bg_label.image = temp_photo_image # Crucial for persistent reference
 
     student_win.bind('<Configure>', update_background_image)
-    student_win.after(100, update_background_image) # Initial call
+    student_win.after(50, update_background_image) # Initial call with slight delay
 
-    # --- Main Layout Frame (using tk.Frame, not ttk.Frame) ---
-    main_layout_frame = tk.Frame(student_win, bg="white")
-    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20)
-    main_layout_frame.grid_rowconfigure(0, weight=1)
-    main_layout_frame.grid_columnconfigure(0, weight=1)
+    # --- Main Layout Frame (tk.Frame - sits over the background image) ---
+    main_layout_frame = tk.Frame(student_win, bg="#F0F0F0") # Default light background
+    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20) # Padding from window edges
+    main_layout_frame.grid_rowconfigure(0, weight=1) # Canvas row expands vertically
+    main_layout_frame.grid_columnconfigure(0, weight=1) # Canvas column expands horizontally
 
     # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="white")
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="#F0F0F0") # Default light background
     main_canvas.grid(row=0, column=0, sticky="nsew")
 
     v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
-    h_scrollbar = ttk.Scrollbar(main_layout_frame, orient="horizontal", command=main_canvas.xview)
     v_scrollbar.grid(row=0, column=1, sticky="ns")
-    h_scrollbar.grid(row=1, column=0, sticky="ew")
 
-    main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+    main_canvas.configure(yscrollcommand=v_scrollbar.set) # Only vertical scroll
 
-    scrollable_content_frame = tk.Frame(main_canvas, padding="20", bg="white")
-    main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
+    # Create a tk.Frame inside the canvas for all content
+    SCROLL_CONTENT_WIDTH = 900 # Define a fixed width for the scrollable content area
+    scrollable_content_frame = tk.Frame(main_canvas, bg="white", width=SCROLL_CONTENT_WIDTH)
+    scrollable_content_frame.pack_propagate(False) # Prevent frame from resizing to content
+    scrollable_content_frame.bind("<Configure>", lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
 
-    def on_frame_configure(event):
+    # Create window in canvas for the content frame, centered horizontally
+    main_canvas.create_window((main_canvas.winfo_width() / 2, 0), window=scrollable_content_frame, anchor="n")
+
+    # Function to reposition content frame if canvas width changes
+    def center_scrollable_content(event=None):
+        main_canvas.coords(scrollable_content_frame, main_canvas.winfo_width() / 2, 0)
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
-        main_canvas.itemconfig(main_canvas.winfo_children()[0], width=main_canvas.winfo_width())
 
-    scrollable_content_frame.bind("<Configure>", on_frame_configure)
+    main_canvas.bind('<Configure>', center_scrollable_content) # Bind to canvas resize
 
+
+    # Mouse wheel scrolling
     def _on_mouse_wheel(event):
         if event.num == 4 or event.delta > 0:
             main_canvas.yview_scroll(-1, "units")
         elif event.num == 5 or event.delta < 0:
             main_canvas.yview_scroll(1, "units")
-    main_canvas.bind_all("<Button-4>", _on_mouse_wheel)
-    main_canvas.bind_all("<Button-5>", _on_mouse_wheel)
-    main_canvas.bind_all("<MouseWheel>", _on_mouse_wheel)
+    student_win.bind_all("<Button-4>", _on_mouse_wheel) # Linux wheel up
+    student_win.bind_all("<Button-5>", _on_mouse_wheel) # Linux wheel down
+    student_win.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
 
 
     # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
     welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold"))
-    welcome_label.pack(pady=(15, 10))
+    welcome_label.pack(pady=(15, 10), padx=20)
 
     notebook = ttk.Notebook(scrollable_content_frame)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
@@ -313,9 +321,6 @@ def open_student_dashboard(student_name):
             accent_button_fg = "white"
             danger_button_bg = "#f44336"
             dark_button_bg = "#555555"
-
-        if not hasattr(student_win, 'original_bg_image'):
-            student_win.configure(bg=root_bg)
 
         # Update backgrounds for Tkinter widgets (non-ttk)
         main_layout_frame.configure(bg=root_bg)
