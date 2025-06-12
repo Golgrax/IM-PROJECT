@@ -6,7 +6,7 @@ from PIL import Image, ImageTk
 import os
 import mysql.connector
 
-def open_student_dashboard(student_name):
+def open_admin_dashboard(student_name):
     student_win = tk.Tk()
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
