@@ -120,7 +120,7 @@ def open_admin_dashboard(admin_name):
 
 
     # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
-    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold"))
+    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
     welcome_label.pack(pady=(15, 10), padx=20)
 
     notebook = ttk.Notebook(scrollable_content_frame)
@@ -195,7 +195,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
@@ -245,7 +245,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
