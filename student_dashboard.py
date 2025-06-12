@@ -1,16 +1,18 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
-from datetime import date, datetime
+from datetime import date, datetime, time # Import time as well
 from PIL import Image, ImageTk
 import os
 import mysql.connector
 
-def open_student_dashboard(student_name):
-    student_win = tk.Tk()
+# Added parent_window parameter for Toplevel
+def open_student_dashboard(parent_window, student_name):
+    student_win = tk.Toplevel(parent_window) # Changed to Toplevel
     student_win.title("Student Dashboard")
-    student_win.geometry("1000x650")
+    student_win.geometry("1000x650") # Initial size
     student_win.minsize(900, 550)
+    student_win.state('zoomed') # Maximize the window
 
     # --- Background Image Management ---
     base_path = os.path.dirname(os.path.abspath(__file__))
@@ -21,8 +23,7 @@ def open_student_dashboard(student_name):
         student_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(student_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-        # Initialize a persistent reference for the PhotoImage
-        student_win.bg_photo_ref = None 
+        student_win.bg_photo_ref = None # Initialize a persistent reference 
     except FileNotFoundError:
         student_win.configure(bg="#800000") # Fallback to PUP maroon
 
@@ -34,15 +35,14 @@ def open_student_dashboard(student_name):
                 resized_image = student_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 temp_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=temp_photo_image)
-                # CRUCIAL: Store a persistent reference on the window object
-                student_win.bg_photo_ref = temp_photo_image 
+                student_win.bg_photo_ref = temp_photo_image # CRUCIAL: Store a persistent reference 
 
     student_win.bind('<Configure>', update_background_image)
-    student_win.after_idle(update_background_image) # Initial call with slight delay, use after_idle for better reliability
+    student_win.after_idle(update_background_image) # Initial call with slight delay
 
-    # --- Define Fixed PUP Theme Colors (No Toggle) ---
-    root_bg_color = "#800000"  # PUP Maroon, matching CTk root
-    frame_bg_color = "#3A3A3A"  # Dark grey for main content frames (simulates slight transparency)
+    # --- Define Fixed PUP Theme Colors ---
+    root_bg_color = "#800000"  # PUP Maroon
+    frame_bg_color = "#3A3A3A"  # Dark grey for main content frames
     label_frame_bg_color = "#555555" # Medium dark grey
     fg_color = "white"
     heading_bg = "#666666"
@@ -68,70 +68,44 @@ def open_student_dashboard(student_name):
 
     style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
     style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black") # Added selectforeground for better visibility
+    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black")
     style.configure("TNotebook", background=frame_bg_color)
     style.configure("TNotebook.Tab", background=label_frame_bg_color, foreground=fg_color)
     style.map("TNotebook.Tab", background=[('selected', frame_bg_color)], foreground=[('selected', fg_color)])
 
-
     style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Accent.TButton", background=[('active', "#DAA520")]) # Active state for gold button
+    style.map("Accent.TButton", background=[('active', "#DAA520")]) 
     style.configure("Danger.TButton", background=danger_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Danger.TButton", background=[('active', "#c82333")]) # Active state for red button
+    style.map("Danger.TButton", background=[('active', "#c82333")])
     style.configure("Dark.TButton", background=dark_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Dark.TButton", background=[('active', "#5a6268")]) # Active state for grey button
+    style.map("Dark.TButton", background=[('active', "#5a6268")])
 
-    # --- Main Layout Frame (tk.Frame - sits over the background image) ---
-    main_layout_frame = tk.Frame(student_win, bg=root_bg_color) # Use root_bg_color for the frame over background
-    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20) # Padding from window edges
-    main_layout_frame.grid_rowconfigure(0, weight=1) # Canvas row expands vertically
-    main_layout_frame.grid_columnconfigure(0, weight=1) # Canvas column expands horizontally
+    # --- Main UI Element Placement (Directly in student_win) ---
+    # Removed main_layout_frame, main_canvas, scrollable_content_frame
 
-    # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg=frame_bg_color) # Use frame_bg_color
-    main_canvas.grid(row=0, column=0, sticky="nsew")
+    welcome_label = ttk.Label(student_win, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold"), background=root_bg_color)
+    welcome_label.pack(pady=(15, 10), padx=20, fill='x')
 
-    v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
-    v_scrollbar.grid(row=0, column=1, sticky="ns")
-
-    main_canvas.configure(yscrollcommand=v_scrollbar.set)
-
-    SCROLL_CONTENT_WIDTH = 900 # Define a fixed width for the scrollable content area
-    scrollable_content_frame = tk.Frame(main_canvas, bg=frame_bg_color, width=SCROLL_CONTENT_WIDTH) # Use frame_bg_color
-    scrollable_content_frame.pack_propagate(False) # Prevent frame from resizing to content
-    
-    # Create window in canvas for the content frame, positioned for centering
-    canvas_window_id = main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw") # Initial anchor "nw"
-
-    # Function to reposition content frame and update scrollregion
-    def on_canvas_configure(event=None):
-        main_canvas.configure(scrollregion=main_canvas.bbox("all"))
-        current_width = main_canvas.winfo_width()
-        # Set the width of the window *inside* the canvas to match canvas width
-        main_canvas.itemconfig(canvas_window_id, width=current_width)
-        # Center the window inside the canvas horizontally
-        main_canvas.coords(canvas_window_id, current_width / 2, 0)
-
-    main_canvas.bind('<Configure>', on_canvas_configure) # Bind to canvas resize
-
-    # Mouse wheel scrolling
-    def _on_mouse_wheel(event):
-        if event.num == 4 or event.delta > 0:
-            main_canvas.yview_scroll(-1, "units")
-        elif event.num == 5 or event.delta < 0:
-            main_canvas.yview_scroll(1, "units")
-    student_win.bind_all("<Button-4>", _on_mouse_wheel) # Linux wheel up
-    student_win.bind_all("<Button-5>", _on_mouse_wheel) # Linux wheel down
-    student_win.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
-
-
-    # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
-    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold"))
-    welcome_label.pack(pady=(15, 10), padx=20) # Will be configured with bg and fg by style
-
-    notebook = ttk.Notebook(scrollable_content_frame)
+    notebook = ttk.Notebook(student_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
 
+    # Mouse wheel scrolling (bind to the Toplevel window)
+    def _on_mouse_wheel(event):
+        # Determine whether to scroll up or down based on event.delta or event.num
+        if event.num == 4 or event.delta > 0: # Scroll up
+            notebook.yview_scroll(-1, "units") # Scroll the notebook content
+        elif event.num == 5 or event.delta < 0: # Scroll down
+            notebook.yview_scroll(1, "units") # Scroll the notebook content
+    # Note: notebook.yview_scroll might not work directly if notebook is not a canvas.
+    # For a general solution without a canvas, this binding is tricky for complex layouts.
+    # If content in tabs overflows, vertical scrollbars within the *tabs* are better.
+    # Removing direct mouse wheel scroll for now, unless specific scrollable areas are added.
+    # student_win.bind_all("<Button-4>", _on_mouse_wheel) 
+    # student_win.bind_all("<Button-5>", _on_mouse_wheel)
+    # student_win.bind_all("<MouseWheel>", _on_mouse_wheel)
+
+
+    # --- Tab 1: Make a Reservation ---
     tab_reserve = ttk.Frame(notebook, padding="15")
     notebook.add(tab_reserve, text=" Make a Reservation ")
 
@@ -157,8 +131,10 @@ def open_student_dashboard(student_name):
             except mysql.connector.Error as err:
                 messagebox.showerror("Database Error", str(err))
             finally:
-                cursor.close()
-                db.close()
+                if 'cursor' in locals() and cursor:
+                    cursor.close()
+                if 'db' in locals() and db:
+                    db.close()
     load_projectors_for_combo()
 
     entry_fields = {
@@ -190,9 +166,21 @@ def open_student_dashboard(student_name):
 
         try:
             proj_id = int(proj_selection.split(" - ")[0])
-            datetime.strptime(date_str, '%Y-%m-%d')
-            datetime.strptime(time_start_str, '%H:%M')
-            datetime.strptime(time_end_str, '%H:%M')
+            start_time = datetime.strptime(time_start_str, '%H:%M').time()
+            end_time = datetime.strptime(time_end_str, '%H:%M').time()
+            res_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+            # Basic time validation
+            if start_time >= end_time:
+                messagebox.showerror("Input Error", "Start time must be before end time.")
+                return
+            if res_date < date.today():
+                messagebox.showerror("Input Error", "Reservation date cannot be in the past.")
+                return
+            if res_date == date.today() and start_time < datetime.now().time():
+                messagebox.showerror("Input Error", "Start time for today cannot be in the past.")
+                return
+
         except ValueError:
             messagebox.showerror("Input Error", "Invalid date or time format. Use YYYY-MM-DD and HH:MM.")
             return
@@ -211,12 +199,37 @@ def open_student_dashboard(student_name):
                 return
             student_id = result[0]
 
+            # Check for availability and conflicts before inserting
             cursor.execute("""
-                INSERT INTO reservations (student_id, projector_id, professor_name, date_reserved,
-                time_start, time_end, purpose, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pending')
+                SELECT status FROM projectors WHERE projector_id = %s
+            """, (proj_id,))
+            proj_status = cursor.fetchone()
+            if not proj_status or proj_status[0] != 'Available':
+                messagebox.showwarning("Availability", f"Projector ID {proj_id} is currently '{proj_status[0]}'. Cannot reserve.")
+                return
+            
+            # Check for overlapping 'Approved' reservations for the same projector
+            cursor.execute("""
+                SELECT COUNT(*) FROM reservations
+                WHERE projector_id = %s AND date_reserved = %s AND status = 'Approved'
+                AND (
+                    (time_start < %s AND time_end > %s) 
+                    OR (%s < time_end AND %s > time_start) 
+                    OR (time_start = %s AND time_end = %s) 
+                )
+            """, (proj_id, res_date, end_time, start_time, 
+                  start_time, end_time, start_time, end_time))
+            conflict_count = cursor.fetchone()[0]
+            if conflict_count > 0:
+                messagebox.showwarning("Conflict", "This projector has an overlapping approved reservation for the selected date/time.")
+                return
+
+            cursor.execute("""
+            INSERT INTO reservations (..., time_start, time_end, ...)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pending')
             """, (student_id, proj_id, professor_name, date_str,
-                  time_start_str, time_end_str, purpose))
+                start_time, end_time, purpose))
+
             db.commit()
 
             messagebox.showinfo("Success", "Reservation submitted! Awaiting admin approval.")
@@ -224,15 +237,18 @@ def open_student_dashboard(student_name):
                 if key != "date_reserved":
                     form_entries[key].delete(0, tk.END)
             form_entries["projector_combo"].set('')
-            load_reservations()
+            load_reservations() # Refresh student's reservation history
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
     ttk.Button(reserve_frame, text="Submit Reservation", command=submit_reservation, style="Accent.TButton").pack(pady=15)
 
+    # --- Tab 2: My Reservations ---
     tab_view = ttk.Frame(notebook, padding="15")
     notebook.add(tab_view, text="My Reservations")
 
@@ -274,8 +290,10 @@ def open_student_dashboard(student_name):
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
     def cancel_reservation():
         selected = tree.selection()
@@ -283,16 +301,17 @@ def open_student_dashboard(student_name):
             messagebox.showwarning("No Selection", "Select a reservation to cancel.")
             return
 
-        res_id = tree.item(selected[0])['values'][0]
-        current_status = tree.item(selected[0])['values'][7]
-
+        res_values = tree.item(selected[0])['values']
+        res_id = res_values[0]
+        current_status = res_values[7] # Status column
+        
         if current_status in ('Rejected', 'Cancelled'):
             messagebox.showinfo("Already Processed", f"This reservation is already {current_status} and cannot be cancelled further.")
             return
         
         # Prevent cancelling past approved/pending reservations directly
-        res_date_str = tree.item(selected[0])['values'][3] # Date column
-        res_end_time_str = tree.item(selected[0])['values'][5] # End time column
+        res_date_str = res_values[3] # Date column
+        res_end_time_str = res_values[5] # End time column
 
         try:
             res_datetime = datetime.combine(datetime.strptime(res_date_str, '%Y-%m-%d').date(), 
@@ -300,7 +319,6 @@ def open_student_dashboard(student_name):
         except ValueError: # Handle potential HH:MM if not HH:MM:SS
              res_datetime = datetime.combine(datetime.strptime(res_date_str, '%Y-%m-%d').date(), 
                                             datetime.strptime(res_end_time_str, '%H:%M').time())
-
 
         if res_datetime < datetime.now() and current_status == 'Approved':
             messagebox.showwarning("Cannot Cancel", "This reservation is already completed and cannot be cancelled.")
@@ -314,11 +332,14 @@ def open_student_dashboard(student_name):
         if not db: return
         cursor = db.cursor()
         try:
+            # Get projector_id before updating reservation status
             cursor.execute("SELECT projector_id FROM reservations WHERE reservation_id = %s", (res_id,))
             proj_id_result = cursor.fetchone()
+            
+            # Update reservation status to 'Cancelled' instead of deleting
+            cursor.execute("UPDATE reservations SET status = 'Cancelled' WHERE reservation_id = %s", (res_id,))
 
-            cursor.execute("DELETE FROM reservations WHERE reservation_id = %s", (res_id,))
-
+            # If it was an 'Approved' reservation, set projector status back to 'Available'
             if current_status == 'Approved' and proj_id_result:
                 proj_id = proj_id_result[0]
                 cursor.execute("UPDATE projectors SET status = 'Available' WHERE projector_id = %s", (proj_id,))
@@ -332,16 +353,17 @@ def open_student_dashboard(student_name):
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
     ttk.Button(view_frame, text="Cancel Selected Reservation", command=cancel_reservation, style="Danger.TButton").pack(pady=15)
 
-    # --- Bottom Controls (Logout Button - fixed at bottom) ---
-    bottom_controls_frame = ttk.Frame(main_layout_frame, padding="10")
-    bottom_controls_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
+    # --- Bottom Controls (Logout Button) ---
+    bottom_controls_frame = ttk.Frame(student_win, padding="10", style="TFrame") # Explicitly apply TFrame style
+    bottom_controls_frame.pack(side="bottom", fill="x")
 
-    # Removed Toggle Theme button
     ttk.Button(bottom_controls_frame, text="Logout", command=student_win.destroy, style="Dark.TButton").pack(side="right", padx=10)
 
     # Initial data load

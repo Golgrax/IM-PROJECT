@@ -1,16 +1,18 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
-from datetime import date, datetime
+from datetime import date, datetime, time # Import time as well
 from PIL import Image, ImageTk
 import os
 import mysql.connector
 
-def open_admin_dashboard(admin_name): # Changed student_name to admin_name
-    admin_win = tk.Tk()
-    admin_win.title("Admin Dashboard") # Changed title
-    admin_win.geometry("1000x650")
+# Added parent_window parameter for Toplevel
+def open_admin_dashboard(parent_window, admin_name):
+    admin_win = tk.Toplevel(parent_window) # Changed to Toplevel
+    admin_win.title("Admin Dashboard")
+    admin_win.geometry("1000x650") # Initial size
     admin_win.minsize(900, 550)
+    admin_win.state('zoomed') # Maximize the window
 
     # --- Background Image Management ---
     base_path = os.path.dirname(os.path.abspath(__file__))
@@ -21,8 +23,7 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         admin_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-        # Initialize a persistent reference for the PhotoImage
-        admin_win.bg_photo_ref = None
+        admin_win.bg_photo_ref = None # Initialize a persistent reference
     except FileNotFoundError:
         admin_win.configure(bg="#800000") # Fallback to PUP maroon
 
@@ -34,14 +35,13 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
                 resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 temp_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=temp_photo_image)
-                # CRUCIAL: Store a persistent reference on the window object
-                admin_win.bg_photo_ref = temp_photo_image
+                admin_win.bg_photo_ref = temp_photo_image # Store persistent reference
 
     admin_win.after_idle(update_background_image) # Use after_idle for initial call
-    admin_win.bind('<Configure>', update_background_image)
+    admin_win.bind('<Configure>', update_background_image) # Bind to window resize
 
     # --- Define Fixed PUP Theme Colors ---
-    root_bg_color = "#800000"  # PUP Maroon, matching CTk root
+    root_bg_color = "#800000"  # PUP Maroon
     frame_bg_color = "#3A3A3A"  # Dark grey for main content frames
     label_frame_bg_color = "#555555" # Medium dark grey
     fg_color = "white"
@@ -68,7 +68,7 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
 
     style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
     style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black") # Added selectforeground for better visibility
+    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black")
     style.configure("TNotebook", background=frame_bg_color)
     style.configure("TNotebook.Tab", background=label_frame_bg_color, foreground=fg_color)
     style.map("TNotebook.Tab", background=[('selected', frame_bg_color)], foreground=[('selected', fg_color)])
@@ -79,60 +79,20 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
     style.map("Danger.TButton", background=[('active', "#c82333")])
     style.configure("Dark.TButton", background=dark_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
     style.map("Dark.TButton", background=[('active', "#5a6268")])
-
-    # --- Main Layout Frame (tk.Frame - sits over the background image) ---
-    main_layout_frame = tk.Frame(admin_win, bg=root_bg_color) # Use root_bg_color
-    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20)
-    main_layout_frame.grid_rowconfigure(0, weight=1)
-    main_layout_frame.grid_columnconfigure(0, weight=1)
-
-    # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg=frame_bg_color) # Use frame_bg_color
-    main_canvas.grid(row=0, column=0, sticky="nsew")
-
-    v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
-    v_scrollbar.grid(row=0, column=1, sticky="ns")
-
-    main_canvas.configure(yscrollcommand=v_scrollbar.set)
-
-    SCROLL_CONTENT_WIDTH = 900 # Fixed width for admin dashboard content
-    scrollable_content_frame = tk.Frame(main_canvas, bg=frame_bg_color, width=SCROLL_CONTENT_WIDTH) # Use frame_bg_color
-    scrollable_content_frame.pack_propagate(False)
-    # The bind on scrollable_content_frame for scrollregion update is somewhat redundant if canvas_configure handles it.
-    # Keep it for safety, but ensure on_canvas_configure is the primary driver.
-    scrollable_content_frame.bind("<Configure>", lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
+    style.configure("Info.TButton", background="#2196F3", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+    style.map("Info.TButton", background=[('active', '#1976D2')])
 
 
-    canvas_window_id = main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
+    # --- Main UI Element Placement (Directly in admin_win) ---
+    # Removed main_layout_frame, main_canvas, scrollable_content_frame
 
-    def on_canvas_configure(event):
-        main_canvas.configure(scrollregion=main_canvas.bbox("all"))
-        current_width = main_canvas.winfo_width()
-        main_canvas.itemconfig(canvas_window_id, width=current_width) # Set window width to canvas width
-        main_canvas.coords(canvas_window_id, current_width / 2, 0) # Center the window
+    welcome_label = ttk.Label(admin_win, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"), background=root_bg_color)
+    welcome_label.pack(pady=(15, 10), padx=20, fill='x')
 
-    main_canvas.bind('<Configure>', on_canvas_configure)
-
-    def _on_mouse_wheel(event):
-        if event.num == 4 or event.delta > 0:
-            main_canvas.yview_scroll(-1, "units")
-        elif event.num == 5 or event.delta < 0:
-            main_canvas.yview_scroll(1, "units")
-    admin_win.bind_all("<Button-4>", _on_mouse_wheel)
-    admin_win.bind_all("<Button-5>", _on_mouse_wheel)
-    admin_win.bind_all("<MouseWheel>", _on_mouse_wheel)
-
-
-    # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
-    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
-    welcome_label.pack(pady=(15, 10), padx=20)
-
-    notebook = ttk.Notebook(scrollable_content_frame)
+    notebook = ttk.Notebook(admin_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
 
-    # --- Admin Dashboard Specifics ---
-
-    # Tab 1: Manage Reservations
+    # --- Tab 1: Manage Reservations ---
     tab_admin_manage_reservations = ttk.Frame(notebook, padding="15")
     notebook.add(tab_admin_manage_reservations, text="Manage Reservations")
 
@@ -188,7 +148,6 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
             return
         
         # Prevent changing status of a reservation that is already in the past
-        today = date.today()
         reservation_date = datetime.strptime(str(res_date), '%Y-%m-%d').date()
         
         # Ensure time format is consistent (HH:MM or HH:MM:SS)
@@ -197,6 +156,12 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         except ValueError:
             reservation_end_time = datetime.strptime(str(res_end_time), '%H:%M').time()
         
+        try:
+            reservation_start_time = datetime.strptime(str(res_start_time), '%H:%M:%S').time()
+        except ValueError:
+            reservation_start_time = datetime.strptime(str(res_start_time), '%H:%M').time()
+
+
         reservation_end_datetime = datetime.combine(reservation_date, reservation_end_time)
 
         if reservation_end_datetime < datetime.now() and current_status in ('Pending', 'Approved'):
@@ -218,18 +183,17 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
 
             if status == 'Approved':
                 # Check for conflicts (same projector, overlapping time, same date)
-                # Adjusted query to properly handle time objects from database
                 cursor.execute("""
                     SELECT COUNT(*) FROM reservations
                     WHERE projector_id = %s AND date_reserved = %s
                     AND reservation_id != %s AND status = 'Approved'
                     AND (
-                        (time_start < %s AND time_end > %s) -- Existing starts before new ends, and ends after new starts
-                        OR (%s < time_end AND %s > time_start) -- New starts before existing ends, and ends after existing starts
-                        OR (time_start = %s AND time_end = %s) -- Exact match
+                        (time_start < %s AND time_end > %s) 
+                        OR (%s < time_end AND %s > time_start) 
+                        OR (time_start = %s AND time_end = %s) 
                     )
-                """, (proj_id, res_date, res_id, res_end_time, res_start_time, 
-                      res_start_time, res_end_time, res_start_time, res_end_time))
+                """, (proj_id, res_date, res_id, reservation_end_time, reservation_start_time, 
+                      reservation_start_time, reservation_end_time, reservation_start_time, reservation_end_time))
                 conflict_count = cursor.fetchone()[0]
                 if conflict_count > 0:
                     messagebox.showerror("Conflict", "This projector has an overlapping approved reservation on this date/time.")
@@ -250,15 +214,16 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
                  return
 
             load_all_reservations()
-            # Refresh projector management tab if it exists
-            if 'load_projectors_for_management' in globals():
-                load_projectors_for_management()
+            # Refresh projector management tab treeview
+            load_projectors_for_management()
 
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
     button_frame = ttk.Frame(admin_reservations_frame)
     button_frame.pack(pady=10)
@@ -267,10 +232,11 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
     ttk.Button(button_frame, text="Cancel", command=lambda: update_reservation_status('Cancelled'), style="Dark.TButton").pack(side="left", padx=5)
 
 
-    # Tab 2: Manage Projectors
+    # --- Tab 2: Manage Projectors ---
     tab_admin_manage_projectors = ttk.Frame(notebook, padding="15")
     notebook.add(tab_admin_manage_projectors, text="Manage Projectors")
 
+    # Add New Projector section
     projector_manage_frame = ttk.LabelFrame(tab_admin_manage_projectors, text="Add New Projector", padding="15")
     projector_manage_frame.pack(padx=20, pady=20, fill="x")
 
@@ -302,11 +268,14 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
     ttk.Button(projector_manage_frame, text="Add Projector", command=add_projector, style="Accent.TButton").pack(pady=10)
 
+    # Existing Projectors List
     proj_list_frame = ttk.LabelFrame(tab_admin_manage_projectors, text="Existing Projectors", padding="15")
     proj_list_frame.pack(padx=20, pady=20, expand=True, fill="both")
 
@@ -330,82 +299,84 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
-            cursor.close()
-            db.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'db' in locals() and db:
+                db.close()
 
-    def update_projector_status_dialog():
+    # Manage Projector Status section (from your "working fine" example)
+    manage_proj_status_frame = ttk.LabelFrame(tab_admin_manage_projectors, text="Update Selected Projector Status", padding="15")
+    manage_proj_status_frame.pack(padx=20, pady=20, fill="x")
+
+    ttk.Label(manage_proj_status_frame, text="Select new status:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
+    proj_status_combo = ttk.Combobox(manage_proj_status_frame, state="readonly", width=20, font=("Arial", 10))
+    proj_status_combo['values'] = ('Available', 'Under Maintenance')
+    proj_status_combo.grid(row=0, column=1, pady=5, padx=5)
+
+    def update_projector_status():
         selected = proj_tree.selection()
         if not selected:
-            messagebox.showwarning("No Selection", "Select a projector to update its status.")
+            messagebox.showwarning("Selection Error", "Please select a projector from the list above to update its status.")
             return
 
         proj_id = proj_tree.item(selected[0])['values'][0]
-        current_status = proj_tree.item(selected[0])['values'][3]
+        new_status = proj_status_combo.get()
 
-        status_win = tk.Toplevel(admin_win)
-        status_win.title("Update Status")
-        status_win.transient(admin_win)
-        status_win.grab_set()
-        status_win.geometry("300x150")
-        status_win.configure(bg=frame_bg_color) # Apply theme to Toplevel
+        if not new_status:
+            messagebox.showwarning("Input Error", "Please select a new status.")
+            return
 
-        # Apply basic style to Toplevel widgets
-        # Using the same style object as main window is fine, just ensure bg for widgets is set
-        ttk.Label(status_win, text=f"Update status for Projector ID: {proj_id}", font=("Arial", 10, "bold")).pack(pady=10)
+        current_proj_status = proj_tree.item(selected[0])['values'][3]
 
-        status_var = tk.StringVar(value=current_status)
-        status_options = ['Available', 'Reserved', 'Under Maintenance']
-        status_combo = ttk.Combobox(status_win, textvariable=status_var, values=status_options, state="readonly", font=("Arial", 10))
-        status_combo.pack(pady=5)
-        status_combo.set(current_status) # Set initial value in combobox
+        if new_status == current_proj_status:
+            messagebox.showinfo("No Change", f"Projector is already '{new_status}'.")
+            return
 
-        def save_status():
-            new_status = status_var.get()
-            db = connect_db()
-            if not db: return
-            cursor = db.cursor()
-            try:
-                # If changing status FROM 'Reserved' to 'Available' or 'Under Maintenance',
-                # ensure there are no currently Approved reservations that would conflict.
-                if new_status != current_status: # Only proceed if status is actually changing
-                    if current_status == 'Reserved' and new_status != 'Reserved':
-                        # Check for future/active APPROVED reservations
-                        cursor.execute("""
-                            SELECT COUNT(*) FROM reservations
-                            WHERE projector_id = %s AND status = 'Approved'
-                            AND date_reserved >= CURDATE()
-                            AND (date_reserved > CURDATE() OR time_end > CURTIME())
-                        """, (proj_id,))
-                        active_reservations = cursor.fetchone()[0]
-                        if active_reservations > 0:
-                            messagebox.showwarning("Cannot Change Status", f"Projector {proj_id} has {active_reservations} active approved reservations. Cannot set to '{new_status}' until all are completed/cancelled.")
-                            return
+        confirm = messagebox.askyesno("Confirm Status Update", f"Are you sure you want to change status of Projector ID {proj_id} to '{new_status}'?")
+        if not confirm:
+            return
 
-                    cursor.execute("UPDATE projectors SET status = %s WHERE projector_id = %s", (new_status, proj_id))
-                    db.commit()
-                    messagebox.showinfo("Success", "Projector status updated.")
-                    load_projectors_for_management()
-                else:
-                    messagebox.showinfo("No Change", "Projector status was not changed.")
-                status_win.destroy()
-            except mysql.connector.Error as err:
-                messagebox.showerror("Database Error", str(err))
-            finally:
+        db = connect_db()
+        if not db: return
+        cursor = db.cursor()
+        try:
+            # Check if projector is 'Reserved' and trying to set to 'Under Maintenance'
+            if current_proj_status == 'Reserved' and new_status == 'Under Maintenance':
+                # Check for active future approved reservations
+                cursor.execute("""
+                    SELECT COUNT(*) FROM reservations
+                    WHERE projector_id = %s AND status = 'Approved'
+                    AND date_reserved >= CURDATE()
+                    AND (date_reserved > CURDATE() OR time_end > CURTIME())
+                """, (proj_id,))
+                active_reservations = cursor.fetchone()[0]
+                if active_reservations > 0:
+                    response = messagebox.askyesno(
+                        "Projector is Reserved",
+                        f"This projector has {active_reservations} active approved reservations. Changing its status to '{new_status}' will make it unavailable. Do you want to proceed? (Active reservations will remain 'Approved' until manually changed.)"
+                    )
+                    if not response:
+                        return
+
+            cursor.execute("UPDATE projectors SET status = %s WHERE projector_id = %s", (new_status, proj_id))
+            db.commit()
+            messagebox.showinfo("Success", f"Projector ID {proj_id} status updated to '{new_status}'.")
+            load_projectors_for_management() # Refresh the projector list
+            load_all_reservations() # Refresh reservations just in case (e.g., if a new reservation was made for it immediately after freeing it up)
+        except mysql.connector.Error as err:
+            messagebox.showerror("Database Error", str(err))
+        finally:
+            if 'cursor' in locals() and cursor:
                 cursor.close()
+            if 'db' in locals() and db:
                 db.close()
 
-        ttk.Button(status_win, text="Save", command=save_status, style="Accent.TButton").pack(pady=10)
+    ttk.Button(manage_proj_status_frame, text="Update Projector Status", command=update_projector_status, style="Info.TButton").grid(row=0, column=2, pady=5, padx=10)
 
 
-    proj_button_frame = ttk.Frame(proj_list_frame)
-    proj_button_frame.pack(pady=10)
-    ttk.Button(proj_button_frame, text="Update Status", command=update_projector_status_dialog, style="Accent.TButton").pack(side="left", padx=5)
-
-    # --- End of Admin Dashboard Specifics ---
-
-    # --- Bottom Controls (Logout Button - fixed at bottom) ---
-    bottom_controls_frame = ttk.Frame(main_layout_frame, padding="10")
-    bottom_controls_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
+    # --- Bottom Controls (Logout Button) ---
+    bottom_controls_frame = ttk.Frame(admin_win, padding="10", style="TFrame") # Explicitly apply TFrame style
+    bottom_controls_frame.pack(side="bottom", fill="x")
 
     ttk.Button(bottom_controls_frame, text="Logout", command=admin_win.destroy, style="Dark.TButton").pack(side="right", padx=10)
 

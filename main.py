@@ -48,9 +48,11 @@ class ProjectorReservationSystem:
             self.bg_label.configure(image=self.bg_image)
 
     def create_login_frame(self):
+        # Destroy all widgets except the background label if it exists
         for widget in self.root.winfo_children():
-            if widget != self.bg_label and hasattr(self, 'bg_label'):
-                widget.destroy()
+            if hasattr(self, 'bg_label') and widget == self.bg_label:
+                continue
+            widget.destroy()
 
         self.login_frame = ctk.CTkFrame(self.root,
                                         fg_color="#800000",
@@ -105,10 +107,10 @@ class ProjectorReservationSystem:
 
         if username == "admin" and password == "admin":
             self.login_frame.destroy()
-            self.root.withdraw()
-            admin_dashboard.open_admin_dashboard("Admin")
-            self.root.deiconify()
-            self.create_login_frame()
+            self.root.withdraw() # Hide main window
+            admin_dashboard.open_admin_dashboard(self.root, "Admin") # Pass self.root as parent
+            self.root.deiconify() # Show main window again when dashboard closes
+            self.create_login_frame() # Recreate login screen
         else:
             conn = connect_db()
             if conn:
@@ -119,10 +121,10 @@ class ProjectorReservationSystem:
                     if student_data:
                         student_name = student_data[0]
                         self.login_frame.destroy()
-                        self.root.withdraw()
-                        student_dashboard.open_student_dashboard(student_name)
-                        self.root.deiconify()
-                        self.create_login_frame()
+                        self.root.withdraw() # Hide main window
+                        student_dashboard.open_student_dashboard(self.root, student_name) # Pass self.root as parent
+                        self.root.deiconify() # Show main window again when dashboard closes
+                        self.create_login_frame() # Recreate login screen
                     else:
                         self.error_label.configure(text="Invalid username or password.")
                 except Error as e:
