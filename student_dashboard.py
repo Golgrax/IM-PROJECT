@@ -30,7 +30,6 @@ def open_student_dashboard(student_name):
     notebook = ttk.Notebook(student_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
 
-    # TAB 1: Make a Reservation
     tab_reserve = ttk.Frame(notebook, padding="15")
     notebook.add(tab_reserve, text=" Make a Reservation ")
 
@@ -40,7 +39,6 @@ def open_student_dashboard(student_name):
     form_labels = ["Select Projector", "Professor Name", "Date (YYYY-MM-DD)", "Start Time (HH:MM)", "End Time (HH:MM)", "Purpose"]
     form_entries = {}
 
-    # Projector Dropdown
     ttk.Label(reserve_frame, text="Select Projector:").pack(anchor="w", padx=10, pady=(10, 0))
     projector_combo = ttk.Combobox(reserve_frame, state="readonly", width=42, font=("Arial", 10))
     project_options = []
@@ -60,7 +58,6 @@ def open_student_dashboard(student_name):
     projector_combo.pack(padx=10, pady=5)
     form_entries["projector_combo"] = projector_combo
 
-    # Other Entries
     entry_fields = {
         "professor_name": "Professor Name",
         "date_reserved": "Date (YYYY-MM-DD)",
@@ -199,14 +196,11 @@ def open_student_dashboard(student_name):
         if not db: return
         cursor = db.cursor()
         try:
-            # Get projector_id associated with this reservation
             cursor.execute("SELECT projector_id FROM reservations WHERE reservation_id = %s", (res_id,))
             proj_id_result = cursor.fetchone()
 
-            # Delete the reservation
             cursor.execute("DELETE FROM reservations WHERE reservation_id = %s", (res_id,))
 
-            # If the reservation was approved, update projector status back to Available
             if current_status == 'Approved' and proj_id_result:
                 proj_id = proj_id_result[0]
                 cursor.execute("UPDATE projectors SET status = 'Available' WHERE projector_id = %s", (proj_id,))
