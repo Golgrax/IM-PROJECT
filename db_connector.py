@@ -6,7 +6,7 @@ def connect_db():
         conn = mysql.connector.connect(
             host="localhost",
             user="root",
-            password="",
+            password="Test1234!",
             database="projector_reservation_db"
         )
         if conn.is_connected():

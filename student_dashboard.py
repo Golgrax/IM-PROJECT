@@ -16,9 +16,9 @@ def open_student_dashboard(student_name):
     base_path = os.path.dirname(os.path.abspath(__file__))
     bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
-    bg_label = None # Declare bg_label here
+    bg_label = None
     try:
-        student_win.original_bg_image = Image.open(bg_image_path) # Store original image on window
+        student_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(student_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
     except FileNotFoundError:
@@ -30,20 +30,26 @@ def open_student_dashboard(student_name):
             height = student_win.winfo_height()
             if width > 0 and height > 0:
                 resized_image = student_win.original_bg_image.resize((width, height), Image.LANCZOS)
-                student_win.bg_photo_image = ImageTk.PhotoImage(resized_image) # Strong reference
+                student_win.bg_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=student_win.bg_photo_image)
 
     student_win.bind('<Configure>', update_background_image)
     student_win.after(100, update_background_image) # Initial call
 
-    # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(student_win, highlightthickness=0)
-    main_canvas.pack(side="top", fill="both", expand=True, padx=0, pady=0)
+    # --- Main Layout Frame (using grid) ---
+    main_layout_frame = tk.Frame(student_win, bg="transparent")
+    main_layout_frame.pack(fill='both', expand=True)
+    main_layout_frame.grid_rowconfigure(0, weight=1)
+    main_layout_frame.grid_columnconfigure(0, weight=1)
 
-    v_scrollbar = ttk.Scrollbar(student_win, orient="vertical", command=main_canvas.yview)
-    h_scrollbar = ttk.Scrollbar(student_win, orient="horizontal", command=main_canvas.xview)
-    v_scrollbar.pack(side="right", fill="y")
-    h_scrollbar.pack(side="bottom", fill="x")
+    # --- Scrollable Content Setup ---
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0)
+    main_canvas.grid(row=0, column=0, sticky="nsew")
+
+    v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
+    h_scrollbar = ttk.Scrollbar(main_layout_frame, orient="horizontal", command=main_canvas.xview)
+    v_scrollbar.grid(row=0, column=1, sticky="ns")
+    h_scrollbar.grid(row=1, column=0, sticky="ew")
 
     main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
@@ -52,6 +58,7 @@ def open_student_dashboard(student_name):
 
     def on_frame_configure(event):
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+        main_canvas.itemconfig(main_canvas.winfo_children()[0], width=main_canvas.winfo_width())
 
     scrollable_content_frame.bind("<Configure>", on_frame_configure)
 
@@ -260,7 +267,6 @@ def open_student_dashboard(student_name):
                     cursor_for_combo.close()
                     db_conn_for_combo.close()
 
-
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -269,23 +275,23 @@ def open_student_dashboard(student_name):
 
     ttk.Button(view_frame, text="Cancel Selected Reservation", command=cancel_reservation, style="Danger.TButton").pack(pady=15)
 
-    bottom_controls_frame = ttk.Frame(student_win, padding="10")
-    bottom_controls_frame.pack(side="bottom", fill="x")
+    # --- Bottom Controls (Logout & Theme Toggle - fixed at bottom) ---
+    bottom_controls_frame = ttk.Frame(main_layout_frame, padding="10")
+    bottom_controls_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
 
     is_dark_mode = False # Keep this outside apply_theme for persistent state
 
-    # --- Theme Configuration (Light and Dark Modes - Defined after frames are created) ---
     def apply_theme(mode):
         nonlocal is_dark_mode
         is_dark_mode = (mode == 'dark')
 
         # PUP Theme Colors
         if mode == 'dark':
-            bg_color = "#333333"
+            root_bg = "#333333"
+            frame_bg = "#3A3A3A" # Dark grey for main content frames (simulates slight transparency)
+            label_frame_bg = "#555555"
             fg_color = "white"
-            frame_bg_color = "#4C0000"
-            label_frame_bg_color = "#555555" # Use slightly different for contrast
-            heading_bg = "#800000"
+            heading_bg = "#666666"
             treeview_bg = "#555555"
             treeview_fg = "white"
             treeview_selected = "#DAA520"
@@ -294,11 +300,11 @@ def open_student_dashboard(student_name):
             danger_button_bg = "#dc3545"
             dark_button_bg = "#6c757d"
         else: # Light mode (PUP inspired)
-            bg_color = "#F0F0F0"
+            root_bg = "#F0F0F0"
+            frame_bg = "white"
+            label_frame_bg = "#E0E0E0"
             fg_color = "black"
-            frame_bg_color = "white"
-            label_frame_bg_color = "#F0F0F0"
-            heading_bg = "#E0E0E0"
+            heading_bg = "#D0D0D0"
             treeview_bg = "white"
             treeview_fg = "black"
             treeview_selected = "#ADD8E6"
@@ -308,36 +314,38 @@ def open_student_dashboard(student_name):
             dark_button_bg = "#555555"
 
         if not hasattr(student_win, 'original_bg_image'):
-            student_win.configure(bg=bg_color)
+            student_win.configure(bg=root_bg)
 
         style = ttk.Style()
         style.theme_use('clam')
 
-        style.configure("TFrame", background=frame_bg_color)
-        style.configure("TLabel", background=frame_bg_color, foreground=fg_color, font=("Arial", 10))
-        style.configure("TLabelFrame", background=label_frame_bg_color, foreground=fg_color, font=("Arial", 12, "bold"))
-        style.configure("TLabelframe.Label", background=label_frame_bg_color, foreground=fg_color)
+        style.configure("TFrame", background=frame_bg)
+        style.configure("TLabel", background=frame_bg, foreground=fg_color, font=("Arial", 10))
+        style.configure("TLabelFrame", background=label_frame_bg, foreground=fg_color, font=("Arial", 12, "bold"))
+        style.configure("TLabelframe.Label", background=label_frame_bg, foreground=fg_color)
         style.configure("Treeview.Heading", font=("Arial", 10, "bold"), background=heading_bg, foreground=fg_color)
         style.configure("Treeview", font=("Arial", 10), rowheight=25, background=treeview_bg, foreground=treeview_fg, fieldbackground=treeview_bg)
         style.map("Treeview", background=[('selected', treeview_selected)])
 
-        style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
-        style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-        style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color)
+        style.configure("TEntry", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TCombobox", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TCombobox.readonly", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TNotebook", background=frame_bg)
+        style.configure("TNotebook.Tab", background=label_frame_bg, foreground=fg_color)
+        style.map("TNotebook.Tab", background=[('selected', frame_bg)], foreground=[('selected', fg_color)])
+
 
         style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
-        style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")]) # Brown or darker green
+        style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")])
         style.configure("Danger.TButton", background=danger_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Danger.TButton", background=[('active', "#D32F2F" if not is_dark_mode else "#c82333")])
         style.configure("Dark.TButton", background=dark_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Dark.TButton", background=[('active', "#777777" if not is_dark_mode else "#5a6268")])
 
-        # Manually update specific labels and canvas
-        welcome_label.configure(background=frame_bg_color, foreground=fg_color)
-        main_canvas.configure(background=frame_bg_color)
-        main_canvas.update_idletasks() # Ensure canvas redraws
+        welcome_label.configure(background=frame_bg, foreground=fg_color)
+        main_canvas.configure(background=frame_bg)
+        main_canvas.update_idletasks()
 
-        # Reload projector combo values to update style and availability
         db = connect_db()
         if db:
             cursor = db.cursor()

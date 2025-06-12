@@ -11,17 +11,17 @@ def open_admin_dashboard(admin_name):
     admin_win.geometry("1200x700")
     admin_win.minsize(900, 600)
 
-    # --- Background Image Management ---
+    # --- Background Image Management (placed early as it affects root window) ---
     base_path = os.path.dirname(os.path.abspath(__file__))
     bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
-    bg_label = None # Declare bg_label here
+    bg_label = None
     try:
-        admin_win.original_bg_image = Image.open(bg_image_path) # Store original image on window
+        admin_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
     except FileNotFoundError:
-        admin_win.configure(bg="#800000") # Fallback to PUP maroon if image missing
+        admin_win.configure(bg="#800000") # Fallback to PUP maroon
 
     def update_background_image(event=None):
         if hasattr(admin_win, 'original_bg_image') and bg_label:
@@ -29,43 +29,47 @@ def open_admin_dashboard(admin_name):
             height = admin_win.winfo_height()
             if width > 0 and height > 0:
                 resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
-                admin_win.bg_photo_image = ImageTk.PhotoImage(resized_image) # Strong reference
+                admin_win.bg_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=admin_win.bg_photo_image)
 
     admin_win.bind('<Configure>', update_background_image)
     admin_win.after(100, update_background_image) # Initial call
 
-    # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(admin_win, highlightthickness=0)
-    main_canvas.pack(side="top", fill="both", expand=True, padx=0, pady=0) # Use padx/pady on main_canvas if needed
+    # --- Main Layout Frame (using grid) ---
+    # This frame holds the canvas + scrollbars and the bottom control frame
+    main_layout_frame = tk.Frame(admin_win, bg="transparent") # Use a tk.Frame here, it supports 'bg' and is transparent
+    main_layout_frame.pack(fill='both', expand=True)
+    main_layout_frame.grid_rowconfigure(0, weight=1) # Canvas row expands
+    main_layout_frame.grid_columnconfigure(0, weight=1) # Canvas column expands
 
-    # Add scrollbars to the canvas
-    v_scrollbar = ttk.Scrollbar(admin_win, orient="vertical", command=main_canvas.yview)
-    h_scrollbar = ttk.Scrollbar(admin_win, orient="horizontal", command=main_canvas.xview)
-    v_scrollbar.pack(side="right", fill="y")
-    h_scrollbar.pack(side="bottom", fill="x")
+    # --- Scrollable Content Setup ---
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0)
+    main_canvas.grid(row=0, column=0, sticky="nsew")
+
+    v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
+    h_scrollbar = ttk.Scrollbar(main_layout_frame, orient="horizontal", command=main_canvas.xview)
+    v_scrollbar.grid(row=0, column=1, sticky="ns")
+    h_scrollbar.grid(row=1, column=0, sticky="ew")
 
     main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
-    # Create a frame to put all content inside the canvas
     scrollable_content_frame = ttk.Frame(main_canvas, padding="20")
-    # Place it inside the canvas. The canvas creates a window for it.
     main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
 
-    # Configure scrolling: when the content frame resizes, update the scroll region
     def on_frame_configure(event):
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+        # Ensure scrollable_content_frame expands horizontally to fill canvas width
+        main_canvas.itemconfig(main_canvas.winfo_children()[0], width=main_canvas.winfo_width())
 
     scrollable_content_frame.bind("<Configure>", on_frame_configure)
 
-    # Allow mouse wheel scrolling
     def _on_mouse_wheel(event):
-        if event.num == 4 or event.delta > 0: # Mouse wheel up
+        if event.num == 4 or event.delta > 0:
             main_canvas.yview_scroll(-1, "units")
-        elif event.num == 5 or event.delta < 0: # Mouse wheel down
+        elif event.num == 5 or event.delta < 0:
             main_canvas.yview_scroll(1, "units")
-    main_canvas.bind_all("<Button-4>", _on_mouse_wheel) # Linux (wheel up)
-    main_canvas.bind_all("<Button-5>", _on_mouse_wheel) # Linux (wheel down)
+    main_canvas.bind_all("<Button-4>", _on_mouse_wheel) # Linux wheel up
+    main_canvas.bind_all("<Button-5>", _on_mouse_wheel) # Linux wheel down
     main_canvas.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
 
 
@@ -278,24 +282,24 @@ def open_admin_dashboard(admin_name):
 
     ttk.Button(manage_proj_status_frame, text="Update Projector Status", command=update_projector_status, style="Info.TButton").grid(row=0, column=2, pady=5, padx=10)
 
-    bottom_controls_frame = ttk.Frame(admin_win, padding="10")
-    bottom_controls_frame.pack(side="bottom", fill="x")
+    # --- Bottom Controls (Logout & Theme Toggle - fixed at bottom) ---
+    bottom_controls_frame = ttk.Frame(main_layout_frame, padding="10")
+    bottom_controls_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
 
-    is_dark_mode = False # Keep this outside apply_theme for persistent state
+    is_dark_mode = False
 
-    # --- Theme Configuration (Light and Dark Modes - Defined after frames are created) ---
     def apply_theme(mode):
         nonlocal is_dark_mode
         is_dark_mode = (mode == 'dark')
 
         # PUP Theme Colors
         if mode == 'dark':
-            bg_color = "#333333" # Dark grey background
+            root_bg = "#333333" # General dark background for window if no image
+            frame_bg = "#3A3A3A" # Dark grey for main content frames (simulates slight transparency)
+            label_frame_bg = "#555555" # Darker grey for labelframes
             fg_color = "white"
-            frame_bg_color = "#4C0000" # Dark maroon for frames
-            label_frame_bg_color = "#660000" # Slightly lighter maroon for labelframes
-            heading_bg = "#800000" # PUP Maroon for treeview headers
-            treeview_bg = "#555555" # Dark grey for treeview rows
+            heading_bg = "#666666" # Dark grey for treeview headers
+            treeview_bg = "#555555"
             treeview_fg = "white"
             treeview_selected = "#DAA520" # PUP Yellow for selection (gold)
             accent_button_bg = "#FFD700" # Bright yellow for accents
@@ -304,43 +308,46 @@ def open_admin_dashboard(admin_name):
             dark_button_bg = "#6c757d" # Grey
             info_button_bg = "#007bff" # Blue
         else: # Light mode (PUP inspired)
-            bg_color = "#F0F0F0" # Light grey background
+            root_bg = "#F0F0F0"
+            frame_bg = "white" # White for main content frames
+            label_frame_bg = "#E0E0E0" # Light grey for labelframes
             fg_color = "black"
-            frame_bg_color = "white" # White for frames
-            label_frame_bg_color = "#F0F0F0" # Light grey for labelframes
-            heading_bg = "#E0E0E0" # Lighter grey for treeview headers
+            heading_bg = "#D0D0D0"
             treeview_bg = "white"
             treeview_fg = "black"
             treeview_selected = "#ADD8E6" # Light blue for selection
             accent_button_bg = "#800000" # PUP Maroon for accents
             accent_button_fg = "white"
-            danger_button_bg = "#f44336" # Red
-            dark_button_bg = "#555555" # Dark grey
-            info_button_bg = "#2196F3" # Blue
+            danger_button_bg = "#f44336"
+            dark_button_bg = "#555555"
+            info_button_bg = "#2196F3"
 
         # Apply root window background (only if image not loaded)
         if not hasattr(admin_win, 'original_bg_image'):
-            admin_win.configure(bg=bg_color)
+            admin_win.configure(bg=root_bg)
 
+        # Configure ttk styles
         style = ttk.Style()
         style.theme_use('clam')
 
-        style.configure("TFrame", background=frame_bg_color)
-        style.configure("TLabel", background=frame_bg_color, foreground=fg_color, font=("Arial", 10))
-        style.configure("TLabelFrame", background=label_frame_bg_color, foreground=fg_color, font=("Arial", 12, "bold"))
-        style.configure("TLabelframe.Label", background=label_frame_bg_color, foreground=fg_color)
+        style.configure("TFrame", background=frame_bg)
+        style.configure("TLabel", background=frame_bg, foreground=fg_color, font=("Arial", 10))
+        style.configure("TLabelFrame", background=label_frame_bg, foreground=fg_color, font=("Arial", 12, "bold"))
+        style.configure("TLabelframe.Label", background=label_frame_bg, foreground=fg_color)
         style.configure("Treeview.Heading", font=("Arial", 10, "bold"), background=heading_bg, foreground=fg_color)
         style.configure("Treeview", font=("Arial", 10), rowheight=25, background=treeview_bg, foreground=treeview_fg, fieldbackground=treeview_bg)
         style.map("Treeview", background=[('selected', treeview_selected)])
 
-        # Widgets that take direct fieldbackground for their text area
-        style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
-        style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-        style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color)
+        style.configure("TEntry", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TCombobox", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TCombobox.readonly", fieldbackground=frame_bg, foreground=fg_color)
+        style.configure("TNotebook", background=frame_bg) # Notebook background
+        style.configure("TNotebook.Tab", background=label_frame_bg, foreground=fg_color) # Tab background and text
+        style.map("TNotebook.Tab", background=[('selected', frame_bg)], foreground=[('selected', fg_color)])
 
-        # Button styles
+
         style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
-        style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")]) # Brown or darker green
+        style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")])
         style.configure("Danger.TButton", background=danger_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Danger.TButton", background=[('active', "#D32F2F" if not is_dark_mode else "#c82333")])
         style.configure("Dark.TButton", background=dark_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
@@ -348,13 +355,12 @@ def open_admin_dashboard(admin_name):
         style.configure("Info.TButton", background=info_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Info.TButton", background=[('active', "#1976D2" if not is_dark_mode else "#0069d9")])
 
-        # Manually update backgrounds of widgets that don't re-render fully with style updates
-        welcome_label.configure(background=frame_bg_color, foreground=fg_color)
-        # Update canvas background to match frame background for seamless look
-        main_canvas.configure(background=frame_bg_color)
-        main_canvas.update_idletasks() # Ensures canvas redraws
+        # Manually update specific widgets
+        welcome_label.configure(background=frame_bg, foreground=fg_color)
+        main_canvas.configure(background=frame_bg) # Canvas background to match frame
+        main_canvas.update_idletasks()
 
-    # --- Theme Controls ---
+    # --- Theme Controls (created here as well) ---
     def toggle_theme():
         if is_dark_mode:
             apply_theme('light')
@@ -364,7 +370,7 @@ def open_admin_dashboard(admin_name):
     ttk.Button(bottom_controls_frame, text="Toggle Theme", command=toggle_theme, style="Dark.TButton").pack(side="left", padx=10)
     ttk.Button(bottom_controls_frame, text="Logout", command=admin_win.destroy, style="Dark.TButton").pack(side="right", padx=10)
 
-    # Initial Theme Application (Call after all relevant widgets are defined)
+    # Initial Theme Application
     admin_win.after(10, lambda: apply_theme('light'))
 
     # Initial data loads
