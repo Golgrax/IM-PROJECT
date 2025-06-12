@@ -3,9 +3,10 @@ from tkinter import messagebox, ttk
 from db_connector import connect_db
 from datetime import date, datetime
 import mysql.connector
+import customtkinter as ctk
 
 def open_student_dashboard(student_name, login_window):
-    student_win = tk.Toplevel(login_window)
+    student_win = ctk.CTkToplevel(login_window)
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
     student_win.configure(bg="#F0F0F0")
@@ -26,7 +27,7 @@ def open_student_dashboard(student_name, login_window):
     style.configure("Dark.TButton", background="#555555", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
     style.map("Dark.TButton", background=[('active', '#777777')])
 
-    ttk.Label(student_win, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold")).pack(pady=(15, 10))
+    ctk.CTkLabel(student_win, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold")).pack(pady=(15, 10))
 
     notebook = ttk.Notebook(student_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)

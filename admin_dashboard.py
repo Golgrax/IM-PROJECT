@@ -2,9 +2,10 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
 import mysql.connector
+import customtkinter as ctk
 
 def open_admin_dashboard(admin_name, login_window):
-    admin_win = tk.Toplevel(login_window)
+    admin_win = ctk.CTkToplevel(login_window)
     admin_win.title("Admin Dashboard")
     admin_win.geometry("1200x700")
     admin_win.minsize(900, 600)
@@ -49,7 +50,7 @@ def open_admin_dashboard(admin_name, login_window):
     scrollable_frame.bind("<Configure>", on_frame_configure)
     canvas.bind("<Configure>", on_canvas_configure)
 
-    ttk.Label(scrollable_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold")).pack(pady=20)
+    ctk.CTkLabel(scrollable_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold")).pack(pady=20)
 
     add_frame = ttk.LabelFrame(scrollable_frame, text="Add New Projector", padding="10")
     add_frame.pack(fill="x", pady=10)
@@ -109,7 +110,7 @@ def open_admin_dashboard(admin_name, login_window):
         cursor = db.cursor()
         try:
             cursor.execute("""
-                SELECT r.reservation_id, s.name, p.projector_name, r.professor_name, r.date_reserved, r.time_start, r.time_end, 
+                SELECT r.reservation_id, s.name, p.projector_name, r.professor_name, r.date_reserved, r.time_start, r.time_end,
                        COALESCE(r.purpose, 'No Purpose'), r.status
                 FROM reservations r
                 JOIN students s ON r.student_id = s.student_id

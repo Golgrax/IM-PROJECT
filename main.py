@@ -25,7 +25,7 @@ class ProjectorReservationSystem:
             self.original_bg_image = Image.open(self.bg_path)
             self.bg_label = ctk.CTkLabel(root, text="")
             self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-            self.root.after(100, self.update_background)
+            self.update_background()
             self.root.bind("<Configure>", self.on_resize)
         except FileNotFoundError:
             print(f"Error: Background image not found at {self.bg_path}. Please check the path.")
@@ -39,17 +39,17 @@ class ProjectorReservationSystem:
             self.update_background()
 
     def update_background(self):
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        if width > 1 and height > 1 and hasattr(self, 'original_bg_image'):
-            resized_image = self.original_bg_image.resize((width, height), Image.LANCZOS)
-            self.bg_image = ctk.CTkImage(light_image=resized_image, dark_image=resized_image, size=(width, height))
-            self.bg_label.configure(image=self.bg_image)
+        if hasattr(self, 'original_bg_image') and self.root.winfo_exists():
+            width = self.root.winfo_width()
+            height = self.root.winfo_height()
+            if width > 1 and height > 1:
+                resized_image = self.original_bg_image.resize((width, height), Image.LANCZOS)
+                self.bg_image = ctk.CTkImage(light_image=resized_image, dark_image=resized_image, size=(width, height))
+                self.bg_label.configure(image=self.bg_image)
 
     def create_login_frame(self):
-        for widget in self.root.winfo_children():
-            if widget != self.bg_label and hasattr(self, 'bg_label'):
-                widget.destroy()
+        if hasattr(self, 'login_frame') and self.login_frame.winfo_exists():
+            self.login_frame.destroy()
 
         self.login_frame = ctk.CTkFrame(self.root,
                                         fg_color="#800000",
@@ -102,11 +102,8 @@ class ProjectorReservationSystem:
         password = self.password_entry.get().strip()
 
         if username == "admin" and password == "admin":
-            self.login_frame.destroy()
             self.root.withdraw()
-            admin_dashboard.open_admin_dashboard("Admin")
-            self.root.deiconify()
-            self.create_login_frame()
+            admin_dashboard.open_admin_dashboard("Admin", self.root)
         else:
             conn = connect_db()
             if conn:
@@ -116,11 +113,8 @@ class ProjectorReservationSystem:
                     student_data = cursor.fetchone()
                     if student_data:
                         student_name = student_data[0]
-                        self.login_frame.destroy()
                         self.root.withdraw()
-                        student_dashboard.open_student_dashboard(student_name)
-                        self.root.deiconify()
-                        self.create_login_frame()
+                        student_dashboard.open_student_dashboard(student_name, self.root)
                     else:
                         self.error_label.configure(text="Invalid username or password.")
                 except Error as e:
