@@ -1,15 +1,30 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
-import mysql.connector
+import mysql.connector # Added: Import mysql.connector
 
 def open_admin_dashboard(admin_name):
     admin_win = tk.Tk()
     admin_win.title("Admin Dashboard")
-    admin_win.geometry("1200x700")
-    admin_win.minsize(900, 600)
+    # Original problematic line: admin_win.state('zoomed')
+    # Previous fix (made it fullscreen):
+    # screen_width = admin_win.winfo_screenwidth()
+    # screen_height = admin_win.winfo_screenheight()
+    # admin_win.geometry(f"{screen_width}x{screen_height}+0+0")
+
+    # NEW FIX: Set a large, but not full-screen, default geometry
+    admin_win.geometry("1200x700") # A common large desktop application size
+    admin_win.minsize(900, 600)    # Ensure it can't be made too small
 
     style = ttk.Style()
+    style.theme_use('clam') # Added from student_dashboard for consistency
+    style.configure("TFrame", background="#F0F0F0") # Added from student_dashboard for consistency
+    style.configure("TLabel", background="#F0F0F0", font=("Arial", 10)) # Added from student_dashboard for consistency
+    style.configure("TLabelFrame", background="#F0F0F0", font=("Arial", 12, "bold")) # Added from student_dashboard for consistency
+    style.configure("Treeview.Heading", font=("Arial", 10, "bold"), background="#D0D0D0", foreground="black") # Added from student_dashboard for consistency
+    style.configure("Treeview", font=("Arial", 10), rowheight=25) # Added from student_dashboard for consistency
+    style.map("Treeview", background=[('selected', '#B0E0E6')]) # Added from student_dashboard for consistency
+    # Ensure all button styles are defined here if they aren't global
     style.configure("Accent.TButton", background="#4CAF50", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
     style.map("Accent.TButton", background=[('active', '#5CB85C')])
     style.configure("Danger.TButton", background="#F44336", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
@@ -19,12 +34,56 @@ def open_admin_dashboard(admin_name):
     style.configure("Info.TButton", background="#2196F3", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
     style.map("Info.TButton", background=[('active', '#1976D2')])
 
-    main_frame = ttk.Frame(admin_win, padding="20")
-    main_frame.pack(fill='both', expand=True)
+    # Define button styles (if not already defined globally or in main.py) - These were duplicated, cleaned up
+    # style.configure("Accent.TButton", background="#4CAF50", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+    # style.map("Accent.TButton", background=[('active', '#5CB85C')])
+    # style.configure("Danger.TButton", background="#F44336", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+    # style.map("Danger.TButton", background=[('active', '#D32F2F')])
+    # style.configure("Dark.TButton", background="#555555", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+    # style.map("Dark.TButton", background=[('active', '#777777')])
+    # style.configure("Info.TButton", background="#2196F3", foreground="white", font=("Arial", 10, "bold"), borderwidth=0) # New style for general info/update
+    # style.map("Info.TButton", background=[('active', '#1976D2')])
 
-    ttk.Label(main_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold")).pack(pady=20)
+    # --- Scrollable Content Setup ---
+    # Create a frame to hold the canvas and scrollbar
+    canvas_container = ttk.Frame(admin_win)
+    canvas_container.pack(fill='both', expand=True, padx=20, pady=10) # Added padding to match original main_frame
 
-    add_frame = ttk.LabelFrame(main_frame, text="Add New Projector", padding="10")
+    canvas = tk.Canvas(canvas_container, bg="#F0F0F0", highlightthickness=0)
+    scrollbar = ttk.Scrollbar(canvas_container, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas, padding="0") # This frame will hold all dashboard content
+
+    # Configure canvas to scroll with the scrollable_frame
+    canvas.configure(yscrollcommand=scrollbar.set)
+    # Place the scrollable_frame inside the canvas
+    # The (0,0) anchor "nw" ensures content starts at top-left
+    window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+    # Pack the scrollbar and canvas
+    scrollbar.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+
+    # Function to update the canvas scroll region when the inner frame changes size
+    def on_frame_configure(event):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    # Function to update the width of the inner frame to match the canvas width
+    # This prevents horizontal scrolling unless content naturally overflows
+    def on_canvas_configure(event):
+        canvas_width = event.width
+        canvas.itemconfig(window_id, width=canvas_width)
+
+    # Bind the configuration events
+    scrollable_frame.bind("<Configure>", on_frame_configure)
+    canvas.bind("<Configure>", on_canvas_configure)
+    # --- End Scrollable Content Setup ---
+
+
+    # All subsequent widgets should be children of 'scrollable_frame'
+    ttk.Label(scrollable_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold")).pack(pady=20)
+
+    # --- Add Projector Section ---
+    add_frame = ttk.LabelFrame(scrollable_frame, text="Add New Projector", padding="10")
     add_frame.pack(fill="x", pady=10)
 
     ttk.Label(add_frame, text="Projector Name:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
@@ -64,7 +123,9 @@ def open_admin_dashboard(admin_name):
 
     ttk.Button(add_frame, text="Add Projector", command=add_projector, style="Accent.TButton").grid(row=2, column=0, columnspan=2, pady=10)
 
-    pending_frame = ttk.LabelFrame(main_frame, text="Pending & Approved Reservations", padding="10")
+
+    # --- Reservation Section ---
+    pending_frame = ttk.LabelFrame(scrollable_frame, text="Pending & Approved Reservations", padding="10")
     pending_frame.pack(fill="both", expand=True, pady=10)
 
     cols = ("Reservation ID", "Student Name", "Projector", "Professor", "Date", "Start", "End", "Purpose", "Status")
@@ -99,7 +160,8 @@ def open_admin_dashboard(admin_name):
             cursor.close()
             db.close()
 
-    btn_frame = ttk.Frame(main_frame, padding="5")
+    # Approve / Reject Buttons
+    btn_frame = ttk.Frame(scrollable_frame, padding="5") # Changed parent to scrollable_frame
     btn_frame.pack(pady=5)
 
     def update_reservation_status(new_status):
@@ -109,7 +171,7 @@ def open_admin_dashboard(admin_name):
             return
 
         res_id = tree.item(selected[0])['values'][0]
-        current_reservation_status = tree.item(selected[0])['values'][8]
+        current_reservation_status = tree.item(selected[0])['values'][8] # Get status from treeview
 
         confirm = messagebox.askyesno(f"{new_status} Reservation", f"Are you sure you want to mark this reservation as {new_status}?")
         if not confirm:
@@ -119,6 +181,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
+            # Get projector_id associated with this reservation from DB
             cursor.execute("SELECT projector_id FROM reservations WHERE reservation_id = %s", (res_id,))
             proj_id_result = cursor.fetchone()
             if not proj_id_result:
@@ -126,17 +189,22 @@ def open_admin_dashboard(admin_name):
                 return
             proj_id = proj_id_result[0]
 
+            # Update reservation status
             cursor.execute("UPDATE reservations SET status = %s WHERE reservation_id = %s", (new_status, res_id))
 
+            # Update projector status based on reservation change
             if new_status == 'Approved' and current_reservation_status != 'Approved':
+                # Only set projector to Reserved if the reservation was just approved
                 cursor.execute("UPDATE projectors SET status = 'Reserved' WHERE projector_id = %s", (proj_id,))
             elif new_status in ('Cancelled', 'Rejected') and current_reservation_status == 'Approved':
+                # Only set projector back to Available if it was previously Approved and now cancelled/rejected
                 cursor.execute("UPDATE projectors SET status = 'Available' WHERE projector_id = %s", (proj_id,))
+            # If a pending reservation is rejected, the projector is already Available, so no change needed.
 
             db.commit()
             messagebox.showinfo("Success", f"Reservation marked as {new_status}.")
             load_pending_reservations()
-            load_projectors()
+            load_projectors() # Refresh projector list as its status might have changed
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -146,7 +214,8 @@ def open_admin_dashboard(admin_name):
     ttk.Button(btn_frame, text="Approve", command=lambda: update_reservation_status("Approved"), style="Accent.TButton", width=15).pack(side="left", padx=10)
     ttk.Button(btn_frame, text="Reject", command=lambda: update_reservation_status("Rejected"), style="Danger.TButton", width=15).pack(side="left", padx=10)
 
-    projector_frame = ttk.LabelFrame(main_frame, text="Projector List", padding="10")
+    # --- Projector List Section ---
+    projector_frame = ttk.LabelFrame(scrollable_frame, text="Projector List", padding="10")
     projector_frame.pack(fill="both", expand=True, pady=10)
 
     proj_cols = ("Projector ID", "Name", "Model", "Status")
@@ -173,12 +242,13 @@ def open_admin_dashboard(admin_name):
             cursor.close()
             db.close()
 
-    manage_proj_status_frame = ttk.LabelFrame(main_frame, text="Manage Projector Status", padding="10")
+    # --- Manage Projector Status Section ---
+    manage_proj_status_frame = ttk.LabelFrame(scrollable_frame, text="Manage Projector Status", padding="10")
     manage_proj_status_frame.pack(fill="x", pady=10)
 
     ttk.Label(manage_proj_status_frame, text="Select new status:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
     proj_status_combo = ttk.Combobox(manage_proj_status_frame, state="readonly", width=20, font=("Arial", 10))
-    proj_status_combo['values'] = ('Available', 'Under Maintenance')
+    proj_status_combo['values'] = ('Available', 'Under Maintenance') # Admin can set these two
     proj_status_combo.grid(row=0, column=1, pady=5, padx=5)
 
     def update_projector_status():
@@ -208,6 +278,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
+            # Check if projector is 'Reserved' and trying to set to 'Under Maintenance'
             if current_proj_status == 'Reserved' and new_status == 'Under Maintenance':
                 response = messagebox.askyesno(
                     "Projector is Reserved",
@@ -215,12 +286,14 @@ def open_admin_dashboard(admin_name):
                 )
                 if not response:
                     return
+                # Optionally, you might want to automatically cancel or reject related pending/approved reservations here.
+                # For simplicity in this update, we'll just change the projector status and leave reservations for manual admin handling.
 
             cursor.execute("UPDATE projectors SET status = %s WHERE projector_id = %s", (new_status, proj_id))
             db.commit()
             messagebox.showinfo("Success", f"Projector ID {proj_id} status updated to '{new_status}'.")
-            load_projectors()
-            load_pending_reservations()
+            load_projectors() # Refresh the projector list
+            load_pending_reservations() # Refresh reservations just in case (e.g., if a new reservation was made for it immediately after freeing it up)
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -229,10 +302,13 @@ def open_admin_dashboard(admin_name):
 
     ttk.Button(manage_proj_status_frame, text="Update Projector Status", command=update_projector_status, style="Info.TButton").grid(row=0, column=2, pady=5, padx=10)
 
+
+    # --- Logout button frame pinned at the bottom ---
     logout_frame = ttk.Frame(admin_win, padding="10")
     logout_frame.pack(side="bottom", fill="x")
     ttk.Button(logout_frame, text="Logout", command=admin_win.destroy, style="Dark.TButton", width=20).pack(pady=5)
 
+    # Initial data loads
     load_pending_reservations()
     load_projectors()
 
