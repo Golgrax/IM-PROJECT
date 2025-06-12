@@ -16,7 +16,7 @@ class ProjectorReservationSystem:
         self.root.resizable(True, True)
 
         ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("red")
+        ctk.set_default_color_theme("blue")
 
         base_path = os.path.dirname(os.path.abspath(__file__))
         self.logo_path = os.path.join(base_path, "IMAGE", "PUP_LOGO.png")
