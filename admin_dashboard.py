@@ -6,7 +6,7 @@ from PIL import Image, ImageTk
 import os
 import mysql.connector
 
-def open_student_dashboard(student_name):
+def open_admin_dashboard(admin_name):
     student_win = tk.Tk()
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
@@ -40,7 +40,7 @@ def open_student_dashboard(student_name):
     student_win.bind('<Configure>', update_background_image)
     student_win.after(100, update_background_image)
 
-    ttk.Label(student_win, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold")).pack(pady=(15, 10))
+    ttk.Label(student_win, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold")).pack(pady=(15, 10))
 
     notebook = ttk.Notebook(student_win)
     notebook.pack(expand=True, fill='both', padx=15, pady=10)
@@ -114,7 +114,7 @@ def open_student_dashboard(student_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
@@ -164,7 +164,7 @@ def open_student_dashboard(student_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
