@@ -2,29 +2,117 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
 from datetime import date, datetime
+from PIL import Image, ImageTk
+import os
+import mysql.connector
 
 def open_student_dashboard(student_name):
     student_win = tk.Tk()
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
-    student_win.configure(bg="#F0F0F0")
     student_win.minsize(900, 550)
 
-    style = ttk.Style()
-    style.theme_use('clam')
-    style.configure("TFrame", background="#F0F0F0")
-    style.configure("TLabel", background="#F0F0F0", font=("Arial", 10))
-    style.configure("TLabelFrame", background="#F0F0F0", font=("Arial", 12, "bold"))
-    style.configure("Treeview.Heading", font=("Arial", 10, "bold"), background="#D0D0D0", foreground="black")
-    style.configure("Treeview", font=("Arial", 10), rowheight=25)
-    style.map("Treeview", background=[('selected', '#B0E0E6')])
-    style.configure("Accent.TButton", background="#4CAF50", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Accent.TButton", background=[('active', '#5CB85C')])
-    style.configure("Danger.TButton", background="#F44336", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Danger.TButton", background=[('active', '#D32F2F')])
-    style.configure("Dark.TButton", background="#555555", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-    style.map("Dark.TButton", background=[('active', '#777777')])
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
+    original_bg_image = None
+    bg_photo_image = None
+    bg_label = None
+
+    try:
+        original_bg_image = Image.open(bg_image_path)
+        bg_label = tk.Label(student_win)
+        bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+    except FileNotFoundError:
+        print(f"Error: Background image not found at {bg_image_path}. Using solid background.")
+        student_win.configure(bg="#F0F0F0")
+
+    def update_background_image(event=None):
+        nonlocal bg_photo_image
+        if original_bg_image and bg_label:
+            width = student_win.winfo_width()
+            height = student_win.winfo_height()
+            if width > 0 and height > 0:
+                resized_image = original_bg_image.resize((width, height), Image.LANCZOS)
+                bg_photo_image = ImageTk.PhotoImage(resized_image)
+                bg_label.configure(image=bg_photo_image)
+                bg_label.image = bg_photo_image 
+
+    student_win.bind('<Configure>', update_background_image)
+    student_win.after(100, update_background_image)
+    is_dark_mode = False
+
+    def apply_theme(mode):
+        nonlocal is_dark_mode
+        is_dark_mode = (mode == 'dark')
+
+        if mode == 'dark':
+            bg_color = "#333333"
+            fg_color = "white"
+            frame_bg_color = "#444444"
+            label_frame_bg_color = "#555555"
+            heading_bg = "#666666"
+            treeview_bg = "#555555"
+            treeview_fg = "white"
+            treeview_selected = "#007acc"
+        else: # Light mode
+            bg_color = "#F0F0F0"
+            fg_color = "black"
+            frame_bg_color = "#FFFFFF"
+            label_frame_bg_color = "#F0F0F0"
+            heading_bg = "#D0D0D0"
+            treeview_bg = "white"
+            treeview_fg = "black"
+            treeview_selected = "#B0E0E6"
+
+        if not original_bg_image:
+            student_win.configure(bg=bg_color)
+        else:
+            pass
+        style = ttk.Style()
+        style.theme_use('clam')
+
+        style.configure("TFrame", background=frame_bg_color)
+        style.configure("TLabel", background=frame_bg_color, foreground=fg_color, font=("Arial", 10))
+        style.configure("TLabelFrame", background=label_frame_bg_color, foreground=fg_color, font=("Arial", 12, "bold"))
+        style.configure("TLabelframe.Label", background=label_frame_bg_color, foreground=fg_color)
+
+        style.configure("Treeview.Heading", font=("Arial", 10, "bold"), background=heading_bg, foreground=fg_color)
+        style.configure("Treeview", font=("Arial", 10), rowheight=25, background=treeview_bg, foreground=treeview_fg, fieldbackground=treeview_bg)
+        style.map("Treeview", background=[('selected', treeview_selected)])
+
+        style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
+        style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
+        style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color)
+
+
+        style.configure("Accent.TButton", background="#4CAF50" if not is_dark_mode else "#28a745", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        style.map("Accent.TButton", background=[('active', "#5CB85C" if not is_dark_mode else "#218838")])
+        style.configure("Danger.TButton", background="#F44336" if not is_dark_mode else "#dc3545", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        style.map("Danger.TButton", background=[('active', "#D32F2F" if not is_dark_mode else "#c82333")])
+        style.configure("Dark.TButton", background="#555555" if not is_dark_mode else "#6c757d", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        style.map("Dark.TButton", background=[('active', "#777777" if not is_dark_mode else "#5a6268")])
+
+        for frame in [notebook, tab_reserve, reserve_frame, tab_view, view_frame, bottom_controls_frame]:
+            frame.configure(background=frame_bg_color)
+        
+        student_win.winfo_children()[1].configure(background=frame_bg_color, foreground=fg_color) # "Welcome" label
+        
+        db = connect_db()
+        if db:
+            cursor = db.cursor()
+            try:
+                cursor.execute("SELECT projector_id, projector_name FROM projectors WHERE status = 'Available'")
+                projectors = cursor.fetchall()
+                projector_combo['values'] = [f"{p[0]} - {p[1]}" for p in projectors]
+            except mysql.connector.Error as err:
+                messagebox.showerror("Database Error", str(err))
+            finally:
+                cursor.close()
+                db.close()
+
+
+    student_win.after(10, lambda: apply_theme('light'))
     ttk.Label(student_win, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold")).pack(pady=(15, 10))
 
     notebook = ttk.Notebook(student_win)
@@ -36,12 +124,14 @@ def open_student_dashboard(student_name):
     reserve_frame = ttk.LabelFrame(tab_reserve, text="Reservation Form", padding="15")
     reserve_frame.pack(padx=20, pady=20, fill="x")
 
-    form_labels = ["Select Projector", "Professor Name", "Date (YYYY-MM-DD)", "Start Time (HH:MM)", "End Time (HH:MM)", "Purpose"]
     form_entries = {}
 
+    # Projector Dropdown
     ttk.Label(reserve_frame, text="Select Projector:").pack(anchor="w", padx=10, pady=(10, 0))
     projector_combo = ttk.Combobox(reserve_frame, state="readonly", width=42, font=("Arial", 10))
-    project_options = []
+    projector_combo.pack(padx=10, pady=5)
+    form_entries["projector_combo"] = projector_combo
+
     db = connect_db()
     if db:
         cursor = db.cursor()
@@ -49,15 +139,14 @@ def open_student_dashboard(student_name):
             cursor.execute("SELECT projector_id, projector_name FROM projectors WHERE status = 'Available'")
             projectors = cursor.fetchall()
             projector_combo['values'] = [f"{p[0]} - {p[1]}" for p in projectors]
-            project_options = projectors # Store for later use if needed
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
             cursor.close()
             db.close()
-    projector_combo.pack(padx=10, pady=5)
-    form_entries["projector_combo"] = projector_combo
 
+
+    # Other Entries
     entry_fields = {
         "professor_name": "Professor Name",
         "date_reserved": "Date (YYYY-MM-DD)",
@@ -118,10 +207,10 @@ def open_student_dashboard(student_name):
 
             messagebox.showinfo("Success", "Reservation submitted! Awaiting admin approval.")
             for key in entry_fields:
-                if key != "date_reserved": # Don't clear date
+                if key != "date_reserved":
                     form_entries[key].delete(0, tk.END)
-            form_entries["projector_combo"].set('') # Clear dropdown selection
-            load_reservations() # Reload student's reservations table
+            form_entries["projector_combo"].set('')
+            load_reservations()
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -208,6 +297,7 @@ def open_student_dashboard(student_name):
             db.commit()
             messagebox.showinfo("Cancelled", "Reservation cancelled successfully.")
             load_reservations()
+            apply_theme('dark' if is_dark_mode else 'light')
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -216,11 +306,18 @@ def open_student_dashboard(student_name):
 
     ttk.Button(view_frame, text="Cancel Selected Reservation", command=cancel_reservation, style="Danger.TButton").pack(pady=15)
 
-    def logout():
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
-            student_win.destroy()
+    bottom_controls_frame = ttk.Frame(student_win, padding="10")
+    bottom_controls_frame.pack(side="bottom", fill="x")
 
-    ttk.Button(student_win, text="Logout", command=logout, style="Dark.TButton").pack(pady=10)
+    def toggle_theme():
+        if is_dark_mode:
+            apply_theme('light')
+        else:
+            apply_theme('dark')
+
+    ttk.Button(bottom_controls_frame, text="Toggle Theme", command=toggle_theme, style="Dark.TButton").pack(side="left", padx=10)
+    ttk.Button(bottom_controls_frame, text="Logout", command=student_win.destroy, style="Dark.TButton").pack(side="right", padx=10)
 
     load_reservations()
+
     student_win.mainloop()
