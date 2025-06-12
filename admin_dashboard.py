@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
+import mysql.connector # Added: Import mysql.connector
 
 def open_admin_dashboard(admin_name):
     admin_win = tk.Tk()

@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from db_connector import connect_db
 from datetime import date, datetime
+import mysql.connector # Added: Import mysql.connector
 
 def open_student_dashboard(student_name):
     student_win = tk.Tk()
