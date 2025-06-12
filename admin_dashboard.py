@@ -21,6 +21,8 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         admin_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        # Initialize a persistent reference for the PhotoImage
+        admin_win.bg_photo_ref = None
     except FileNotFoundError:
         admin_win.configure(bg="#800000") # Fallback to PUP maroon
 
@@ -32,7 +34,8 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
                 resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 temp_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=temp_photo_image)
-                bg_label.image = temp_photo_image # Essential to prevent garbage collection
+                # CRUCIAL: Store a persistent reference on the window object
+                admin_win.bg_photo_ref = temp_photo_image
 
     admin_win.after_idle(update_background_image) # Use after_idle for initial call
     admin_win.bind('<Configure>', update_background_image)
@@ -65,7 +68,7 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
 
     style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
     style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected)
+    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black") # Added selectforeground for better visibility
     style.configure("TNotebook", background=frame_bg_color)
     style.configure("TNotebook.Tab", background=label_frame_bg_color, foreground=fg_color)
     style.map("TNotebook.Tab", background=[('selected', frame_bg_color)], foreground=[('selected', fg_color)])
@@ -187,12 +190,20 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         # Prevent changing status of a reservation that is already in the past
         today = date.today()
         reservation_date = datetime.strptime(str(res_date), '%Y-%m-%d').date()
-        reservation_end_datetime = datetime.combine(reservation_date, datetime.strptime(str(res_end_time), '%H:%M:%S').time())
+        
+        # Ensure time format is consistent (HH:MM or HH:MM:SS)
+        try:
+            reservation_end_time = datetime.strptime(str(res_end_time), '%H:%M:%S').time()
+        except ValueError:
+            reservation_end_time = datetime.strptime(str(res_end_time), '%H:%M').time()
+        
+        reservation_end_datetime = datetime.combine(reservation_date, reservation_end_time)
 
-        if reservation_end_datetime < datetime.now() and current_status not in ('Approved', 'Rejected', 'Cancelled'):
-             messagebox.showwarning("Cannot Update", "This reservation is in the past and its status cannot be changed unless it was previously Approved/Rejected/Cancelled.")
-             return
-
+        if reservation_end_datetime < datetime.now() and current_status in ('Pending', 'Approved'):
+             if not messagebox.askyesno("Confirm Past Reservation Update", 
+                                        "This reservation is in the past. Are you sure you want to change its status?"):
+                 return
+             
         db = connect_db()
         if not db: return
         cursor = db.cursor()
@@ -207,19 +218,21 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
 
             if status == 'Approved':
                 # Check for conflicts (same projector, overlapping time, same date)
+                # Adjusted query to properly handle time objects from database
                 cursor.execute("""
                     SELECT COUNT(*) FROM reservations
                     WHERE projector_id = %s AND date_reserved = %s
                     AND reservation_id != %s AND status = 'Approved'
                     AND (
-                        (TIME_TO_SEC(time_start) < TIME_TO_SEC(%s) AND TIME_TO_SEC(time_end) > TIME_TO_SEC(%s))
-                        OR (TIME_TO_SEC(%s) < TIME_TO_SEC(time_end) AND TIME_TO_SEC(%s) > TIME_TO_SEC(time_start))
-                        OR (TIME_TO_SEC(time_start) = TIME_TO_SEC(%s) AND TIME_TO_SEC(time_end) = TIME_TO_SEC(%s))
+                        (time_start < %s AND time_end > %s) -- Existing starts before new ends, and ends after new starts
+                        OR (%s < time_end AND %s > time_start) -- New starts before existing ends, and ends after existing starts
+                        OR (time_start = %s AND time_end = %s) -- Exact match
                     )
-                """, (proj_id, res_date, res_id, res_end_time, res_start_time, res_start_time, res_end_time, res_start_time, res_end_time))
+                """, (proj_id, res_date, res_id, res_end_time, res_start_time, 
+                      res_start_time, res_end_time, res_start_time, res_end_time))
                 conflict_count = cursor.fetchone()[0]
                 if conflict_count > 0:
-                    messagebox.showerror("Conflict", "This projector has an overlapping approved reservation on this date.")
+                    messagebox.showerror("Conflict", "This projector has an overlapping approved reservation on this date/time.")
                     return
 
                 cursor.execute("UPDATE projectors SET status = 'Reserved' WHERE projector_id = %s", (proj_id,))
@@ -237,8 +250,8 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
                  return
 
             load_all_reservations()
-            # If there's a projector management tab, you might want to refresh it too.
-            if 'load_projectors_for_management' in globals(): # Check if function exists
+            # Refresh projector management tab if it exists
+            if 'load_projectors_for_management' in globals():
                 load_projectors_for_management()
 
         except mysql.connector.Error as err:
@@ -337,16 +350,14 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
         status_win.configure(bg=frame_bg_color) # Apply theme to Toplevel
 
         # Apply basic style to Toplevel widgets
-        status_style = ttk.Style() # Use the same style object as main window
-        status_style.configure("TLabel", background=frame_bg_color, foreground=fg_color)
-        status_style.configure("TButton", background=accent_button_bg, foreground=accent_button_fg) # Buttons inside Toplevel
-
+        # Using the same style object as main window is fine, just ensure bg for widgets is set
         ttk.Label(status_win, text=f"Update status for Projector ID: {proj_id}", font=("Arial", 10, "bold")).pack(pady=10)
 
         status_var = tk.StringVar(value=current_status)
         status_options = ['Available', 'Reserved', 'Under Maintenance']
         status_combo = ttk.Combobox(status_win, textvariable=status_var, values=status_options, state="readonly", font=("Arial", 10))
         status_combo.pack(pady=5)
+        status_combo.set(current_status) # Set initial value in combobox
 
         def save_status():
             new_status = status_var.get()
@@ -356,22 +367,26 @@ def open_admin_dashboard(admin_name): # Changed student_name to admin_name
             try:
                 # If changing status FROM 'Reserved' to 'Available' or 'Under Maintenance',
                 # ensure there are no currently Approved reservations that would conflict.
-                if current_status == 'Reserved' and new_status != 'Reserved':
-                    cursor.execute("""
-                        SELECT COUNT(*) FROM reservations
-                        WHERE projector_id = %s AND status = 'Approved'
-                        AND date_reserved >= CURDATE()
-                        AND (time_end > CURTIME() OR date_reserved > CURDATE())
-                    """, (proj_id,))
-                    active_reservations = cursor.fetchone()[0]
-                    if active_reservations > 0:
-                        messagebox.showwarning("Cannot Change Status", f"Projector {proj_id} has {active_reservations} active approved reservations. Cannot set to '{new_status}' until all are completed/cancelled.")
-                        return
+                if new_status != current_status: # Only proceed if status is actually changing
+                    if current_status == 'Reserved' and new_status != 'Reserved':
+                        # Check for future/active APPROVED reservations
+                        cursor.execute("""
+                            SELECT COUNT(*) FROM reservations
+                            WHERE projector_id = %s AND status = 'Approved'
+                            AND date_reserved >= CURDATE()
+                            AND (date_reserved > CURDATE() OR time_end > CURTIME())
+                        """, (proj_id,))
+                        active_reservations = cursor.fetchone()[0]
+                        if active_reservations > 0:
+                            messagebox.showwarning("Cannot Change Status", f"Projector {proj_id} has {active_reservations} active approved reservations. Cannot set to '{new_status}' until all are completed/cancelled.")
+                            return
 
-                cursor.execute("UPDATE projectors SET status = %s WHERE projector_id = %s", (new_status, proj_id))
-                db.commit()
-                messagebox.showinfo("Success", "Projector status updated.")
-                load_projectors_for_management()
+                    cursor.execute("UPDATE projectors SET status = %s WHERE projector_id = %s", (new_status, proj_id))
+                    db.commit()
+                    messagebox.showinfo("Success", "Projector status updated.")
+                    load_projectors_for_management()
+                else:
+                    messagebox.showinfo("No Change", "Projector status was not changed.")
                 status_win.destroy()
             except mysql.connector.Error as err:
                 messagebox.showerror("Database Error", str(err))

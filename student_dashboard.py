@@ -21,6 +21,8 @@ def open_student_dashboard(student_name):
         student_win.original_bg_image = Image.open(bg_image_path)
         bg_label = tk.Label(student_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        # Initialize a persistent reference for the PhotoImage
+        student_win.bg_photo_ref = None 
     except FileNotFoundError:
         student_win.configure(bg="#800000") # Fallback to PUP maroon
 
@@ -32,7 +34,8 @@ def open_student_dashboard(student_name):
                 resized_image = student_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 temp_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=temp_photo_image)
-                bg_label.image = temp_photo_image # Crucial for persistent reference
+                # CRUCIAL: Store a persistent reference on the window object
+                student_win.bg_photo_ref = temp_photo_image 
 
     student_win.bind('<Configure>', update_background_image)
     student_win.after_idle(update_background_image) # Initial call with slight delay, use after_idle for better reliability
@@ -65,10 +68,11 @@ def open_student_dashboard(student_name):
 
     style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
     style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
-    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected) # Add selectbackground for readonly
+    style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color, selectbackground=treeview_selected, selectforeground="black") # Added selectforeground for better visibility
     style.configure("TNotebook", background=frame_bg_color)
     style.configure("TNotebook.Tab", background=label_frame_bg_color, foreground=fg_color)
     style.map("TNotebook.Tab", background=[('selected', frame_bg_color)], foreground=[('selected', fg_color)])
+
 
     style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
     style.map("Accent.TButton", background=[('active', "#DAA520")]) # Active state for gold button
@@ -284,6 +288,22 @@ def open_student_dashboard(student_name):
 
         if current_status in ('Rejected', 'Cancelled'):
             messagebox.showinfo("Already Processed", f"This reservation is already {current_status} and cannot be cancelled further.")
+            return
+        
+        # Prevent cancelling past approved/pending reservations directly
+        res_date_str = tree.item(selected[0])['values'][3] # Date column
+        res_end_time_str = tree.item(selected[0])['values'][5] # End time column
+
+        try:
+            res_datetime = datetime.combine(datetime.strptime(res_date_str, '%Y-%m-%d').date(), 
+                                            datetime.strptime(res_end_time_str, '%H:%M:%S').time())
+        except ValueError: # Handle potential HH:MM if not HH:MM:SS
+             res_datetime = datetime.combine(datetime.strptime(res_date_str, '%Y-%m-%d').date(), 
+                                            datetime.strptime(res_end_time_str, '%H:%M').time())
+
+
+        if res_datetime < datetime.now() and current_status == 'Approved':
+            messagebox.showwarning("Cannot Cancel", "This reservation is already completed and cannot be cancelled.")
             return
 
         confirm = messagebox.askyesno("Confirm Cancellation", "Are you sure you want to cancel this reservation?")
