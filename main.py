@@ -17,11 +17,9 @@ class ProjectorReservationSystem:
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("green")
-        # Load background image
-        # Assuming IMAGE folder is sibling to main.py
         base_path = os.path.dirname(os.path.abspath(__file__))
         self.logo_path = os.path.join(base_path, "IMAGE", "PUP_LOGO.png")
-        self.bg_path = os.path.join(base_path, "IMAGE", "background.png") # Changed to a generic background image
+        self.bg_path = os.path.join(base_path, "IMAGE", "background.png")
 
         try:
             self.original_bg_image = Image.open(self.bg_path)
@@ -70,7 +68,6 @@ class ProjectorReservationSystem:
             print(f"Error: Logo image not found at {self.logo_path}.")
             ctk.CTkLabel(self.login_frame, text="PUP Logo", font=("Arial", 16, "bold"), text_color="white").pack(pady=(15, 5))
 
-
         ctk.CTkLabel(
             self.login_frame,
             text="Projector Reservation System",
@@ -93,7 +90,7 @@ class ProjectorReservationSystem:
             self.login_frame,
             text="Login",
             font=("Arial", 14, "bold"),
-            fg_color="#FFD700", # Gold color for button
+            fg_color="#FFD700",
             text_color="black",
             hover_color="#DAA520",
             command=self.login
@@ -106,10 +103,10 @@ class ProjectorReservationSystem:
 
         if username == "admin" and password == "admin":
             self.login_frame.destroy()
-            self.root.withdraw() # Hide main window
+            self.root.withdraw()
             admin_dashboard.open_admin_dashboard("Admin")
-            self.root.deiconify() # Show main window again when dashboard closes
-            self.create_login_frame() # Re-show login frame
+            self.root.deiconify()
+            self.create_login_frame()
         else:
             conn = connect_db()
             if conn:
