@@ -15,38 +15,65 @@ def open_admin_dashboard(admin_name):
     base_path = os.path.dirname(os.path.abspath(__file__))
     bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
-    original_bg_image = None
-    bg_label = None
-
+    bg_label = None # Declare bg_label here
     try:
-        original_bg_image = Image.open(bg_image_path)
+        admin_win.original_bg_image = Image.open(bg_image_path) # Store original image on window
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
     except FileNotFoundError:
-        admin_win.configure(bg="#F0F0F0") # Fallback
+        admin_win.configure(bg="#800000") # Fallback to PUP maroon if image missing
 
     def update_background_image(event=None):
-        if original_bg_image and bg_label:
+        if hasattr(admin_win, 'original_bg_image') and bg_label:
             width = admin_win.winfo_width()
             height = admin_win.winfo_height()
             if width > 0 and height > 0:
-                resized_image = original_bg_image.resize((width, height), Image.LANCZOS)
-                # Keep a strong reference to the PhotoImage object
-                admin_win.bg_photo_image = ImageTk.PhotoImage(resized_image)
+                resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
+                admin_win.bg_photo_image = ImageTk.PhotoImage(resized_image) # Strong reference
                 bg_label.configure(image=admin_win.bg_photo_image)
-                # No need for bg_label.image = bg_photo_image when directly setting on win
 
     admin_win.bind('<Configure>', update_background_image)
-    admin_win.after(100, update_background_image)
+    admin_win.after(100, update_background_image) # Initial call
 
-    # --- UI Element Definitions (Order matters for apply_theme) ---
-    main_frame = ttk.Frame(admin_win, padding="20")
-    main_frame.pack(fill='both', expand=True)
+    # --- Scrollable Content Setup ---
+    main_canvas = tk.Canvas(admin_win, highlightthickness=0)
+    main_canvas.pack(side="top", fill="both", expand=True, padx=0, pady=0) # Use padx/pady on main_canvas if needed
 
-    welcome_label = ttk.Label(main_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
+    # Add scrollbars to the canvas
+    v_scrollbar = ttk.Scrollbar(admin_win, orient="vertical", command=main_canvas.yview)
+    h_scrollbar = ttk.Scrollbar(admin_win, orient="horizontal", command=main_canvas.xview)
+    v_scrollbar.pack(side="right", fill="y")
+    h_scrollbar.pack(side="bottom", fill="x")
+
+    main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+    # Create a frame to put all content inside the canvas
+    scrollable_content_frame = ttk.Frame(main_canvas, padding="20")
+    # Place it inside the canvas. The canvas creates a window for it.
+    main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
+
+    # Configure scrolling: when the content frame resizes, update the scroll region
+    def on_frame_configure(event):
+        main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+
+    scrollable_content_frame.bind("<Configure>", on_frame_configure)
+
+    # Allow mouse wheel scrolling
+    def _on_mouse_wheel(event):
+        if event.num == 4 or event.delta > 0: # Mouse wheel up
+            main_canvas.yview_scroll(-1, "units")
+        elif event.num == 5 or event.delta < 0: # Mouse wheel down
+            main_canvas.yview_scroll(1, "units")
+    main_canvas.bind_all("<Button-4>", _on_mouse_wheel) # Linux (wheel up)
+    main_canvas.bind_all("<Button-5>", _on_mouse_wheel) # Linux (wheel down)
+    main_canvas.bind_all("<MouseWheel>", _on_mouse_wheel) # Windows/macOS
+
+
+    # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
+    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
     welcome_label.pack(pady=20)
 
-    add_frame = ttk.LabelFrame(main_frame, text="Add New Projector", padding="10")
+    add_frame = ttk.LabelFrame(scrollable_content_frame, text="Add New Projector", padding="10")
     add_frame.pack(fill="x", pady=10)
 
     ttk.Label(add_frame, text="Projector Name:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
@@ -86,7 +113,7 @@ def open_admin_dashboard(admin_name):
 
     ttk.Button(add_frame, text="Add Projector", command=add_projector, style="Accent.TButton").grid(row=2, column=0, columnspan=2, pady=10)
 
-    pending_frame = ttk.LabelFrame(main_frame, text="Pending & Approved Reservations", padding="10")
+    pending_frame = ttk.LabelFrame(scrollable_content_frame, text="Pending & Approved Reservations", padding="10")
     pending_frame.pack(fill="both", expand=True, pady=10)
 
     cols = ("Reservation ID", "Student Name", "Projector", "Professor", "Date", "Start", "End", "Purpose", "Status")
@@ -121,7 +148,7 @@ def open_admin_dashboard(admin_name):
             cursor.close()
             db.close()
 
-    btn_frame = ttk.Frame(main_frame, padding="5")
+    btn_frame = ttk.Frame(scrollable_content_frame, padding="5")
     btn_frame.pack(pady=5)
 
     def update_reservation_status(new_status):
@@ -168,7 +195,7 @@ def open_admin_dashboard(admin_name):
     ttk.Button(btn_frame, text="Approve", command=lambda: update_reservation_status("Approved"), style="Accent.TButton", width=15).pack(side="left", padx=10)
     ttk.Button(btn_frame, text="Reject", command=lambda: update_reservation_status("Rejected"), style="Danger.TButton", width=15).pack(side="left", padx=10)
 
-    projector_frame = ttk.LabelFrame(main_frame, text="Projector List", padding="10")
+    projector_frame = ttk.LabelFrame(scrollable_content_frame, text="Projector List", padding="10")
     projector_frame.pack(fill="both", expand=True, pady=10)
 
     proj_cols = ("Projector ID", "Name", "Model", "Status")
@@ -195,7 +222,7 @@ def open_admin_dashboard(admin_name):
             cursor.close()
             db.close()
 
-    manage_proj_status_frame = ttk.LabelFrame(main_frame, text="Manage Projector Status", padding="10")
+    manage_proj_status_frame = ttk.LabelFrame(scrollable_content_frame, text="Manage Projector Status", padding="10")
     manage_proj_status_frame.pack(fill="x", pady=10)
 
     ttk.Label(manage_proj_status_frame, text="Select new status:").grid(row=0, column=0, sticky="w", pady=5, padx=5)
@@ -261,29 +288,39 @@ def open_admin_dashboard(admin_name):
         nonlocal is_dark_mode
         is_dark_mode = (mode == 'dark')
 
+        # PUP Theme Colors
         if mode == 'dark':
-            bg_color = "#333333"
+            bg_color = "#333333" # Dark grey background
             fg_color = "white"
-            frame_bg_color = "#444444"
-            label_frame_bg_color = "#555555"
-            heading_bg = "#666666"
-            treeview_bg = "#555555"
+            frame_bg_color = "#4C0000" # Dark maroon for frames
+            label_frame_bg_color = "#660000" # Slightly lighter maroon for labelframes
+            heading_bg = "#800000" # PUP Maroon for treeview headers
+            treeview_bg = "#555555" # Dark grey for treeview rows
             treeview_fg = "white"
-            treeview_selected = "#007acc"
-        else:
-            bg_color = "#F0F0F0"
+            treeview_selected = "#DAA520" # PUP Yellow for selection (gold)
+            accent_button_bg = "#FFD700" # Bright yellow for accents
+            accent_button_fg = "black"
+            danger_button_bg = "#dc3545" # Red
+            dark_button_bg = "#6c757d" # Grey
+            info_button_bg = "#007bff" # Blue
+        else: # Light mode (PUP inspired)
+            bg_color = "#F0F0F0" # Light grey background
             fg_color = "black"
-            frame_bg_color = "#FFFFFF"
-            label_frame_bg_color = "#F0F0F0"
-            heading_bg = "#D0D0D0"
+            frame_bg_color = "white" # White for frames
+            label_frame_bg_color = "#F0F0F0" # Light grey for labelframes
+            heading_bg = "#E0E0E0" # Lighter grey for treeview headers
             treeview_bg = "white"
             treeview_fg = "black"
-            treeview_selected = "#B0E0E6"
+            treeview_selected = "#ADD8E6" # Light blue for selection
+            accent_button_bg = "#800000" # PUP Maroon for accents
+            accent_button_fg = "white"
+            danger_button_bg = "#f44336" # Red
+            dark_button_bg = "#555555" # Dark grey
+            info_button_bg = "#2196F3" # Blue
 
-        if not original_bg_image:
+        # Apply root window background (only if image not loaded)
+        if not hasattr(admin_win, 'original_bg_image'):
             admin_win.configure(bg=bg_color)
-        else:
-            pass
 
         style = ttk.Style()
         style.theme_use('clam')
@@ -296,30 +333,28 @@ def open_admin_dashboard(admin_name):
         style.configure("Treeview", font=("Arial", 10), rowheight=25, background=treeview_bg, foreground=treeview_fg, fieldbackground=treeview_bg)
         style.map("Treeview", background=[('selected', treeview_selected)])
 
-        # These widgets (Entry, Combobox) take a direct fieldbackground option for their text area
+        # Widgets that take direct fieldbackground for their text area
         style.configure("TEntry", fieldbackground=frame_bg_color, foreground=fg_color)
         style.configure("TCombobox", fieldbackground=frame_bg_color, foreground=fg_color)
         style.configure("TCombobox.readonly", fieldbackground=frame_bg_color, foreground=fg_color)
 
-
-        style.configure("Accent.TButton", background="#4CAF50" if not is_dark_mode else "#28a745", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
-        style.map("Accent.TButton", background=[('active', "#5CB85C" if not is_dark_mode else "#218838")])
-        style.configure("Danger.TButton", background="#F44336" if not is_dark_mode else "#dc3545", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        # Button styles
+        style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
+        style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")]) # Brown or darker green
+        style.configure("Danger.TButton", background=danger_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Danger.TButton", background=[('active', "#D32F2F" if not is_dark_mode else "#c82333")])
-        style.configure("Dark.TButton", background="#555555" if not is_dark_mode else "#6c757d", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        style.configure("Dark.TButton", background=dark_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Dark.TButton", background=[('active', "#777777" if not is_dark_mode else "#5a6268")])
-        style.configure("Info.TButton", background="#2196F3" if not is_dark_mode else "#007bff", foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
+        style.configure("Info.TButton", background=info_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Info.TButton", background=[('active', "#1976D2" if not is_dark_mode else "#0069d9")])
 
-        # Manually update backgrounds of specific frames/widgets that Tkinter might not re-render with style updates automatically
-        # Remove direct background calls for ttk widgets that use styles.
-        # This loop is problematic because ttk.Frame does not take a 'background' option directly.
-        # It gets its background from the 'TFrame' style. The previous `frame.configure(background=...)` caused the `unknown option` error.
-        # We only need to configure the style once.
-        # However, for widgets like 'Welcome' label which are NOT part of a 'TLabel' style, we might need manual update.
-        # Here we only update specific labels explicitly:
+        # Manually update backgrounds of widgets that don't re-render fully with style updates
         welcome_label.configure(background=frame_bg_color, foreground=fg_color)
+        # Update canvas background to match frame background for seamless look
+        main_canvas.configure(background=frame_bg_color)
+        main_canvas.update_idletasks() # Ensures canvas redraws
 
+    # --- Theme Controls ---
     def toggle_theme():
         if is_dark_mode:
             apply_theme('light')
@@ -330,8 +365,9 @@ def open_admin_dashboard(admin_name):
     ttk.Button(bottom_controls_frame, text="Logout", command=admin_win.destroy, style="Dark.TButton").pack(side="right", padx=10)
 
     # Initial Theme Application (Call after all relevant widgets are defined)
-    admin_win.after(10, lambda: apply_theme('light')) # Schedule theme application
+    admin_win.after(10, lambda: apply_theme('light'))
 
+    # Initial data loads
     load_pending_reservations()
     load_projectors()
 
