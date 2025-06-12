@@ -1,30 +1,42 @@
+# app.py
 import customtkinter as ctk
 from PIL import Image
 from db_connector import DBManager
+from admin_dashboard import AdminDashboard # Import your new dashboard classes
+from student_dashboard import StudentDashboard
 
 class ProjectorReservationSystem:
     def __init__(self, root, db_manager):
         self.root = root
-        self.db = db_manager
+        self.db = db_manager # Store the DBManager instance
 
         self.root.title("Projector Reservation System")
         self.root.geometry("1000x600")
-        self.root.configure(bg="#800000")
+        self.root.configure(bg="#800000") # Maroon background for main window
         self.root.resizable(True, True)
 
-        ctk.set_appearance_mode("dark")
+        ctk.set_appearance_mode("dark") # Default appearance for the main app
+
+        # Load background image
+        # IMPORTANT: Adjust this path relative to where main.py is run.
+        # If your 'IMAGE' folder is directly in 'IM-PROJECT', './IMAGE/PUP_LOGO.png' is correct.
         image_path = "./IMAGE/PUP_LOGO.png"
+        self.original_image = None
         try:
             self.original_image = Image.open(image_path)
+            print(f"Background image loaded from: {image_path}")
         except FileNotFoundError:
             print(f"Warning: Background image not found at {image_path}. Displaying without image.")
-            self.original_image = None
+        except Exception as e:
+            print(f"Error loading image: {e}")
+            self.original_image = None # Ensure it's None if any error occurs
 
         self.bg_label = ctk.CTkLabel(root, text="")
         self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
         self.root.after(100, self.update_background)
         self.root.bind("<Configure>", self.on_resize)
 
+        # Start with login screen
         self.create_login_frame()
 
     def on_resize(self, event):
@@ -39,9 +51,11 @@ class ProjectorReservationSystem:
             self.bg_image = ctk.CTkImage(light_image=resized_image, dark_image=resized_image, size=(width, height))
             self.bg_label.configure(image=self.bg_image)
         elif not self.original_image:
-            self.bg_label.configure(fg_color="#800000")
+            # If image failed to load, clear background or set a solid color
+            self.bg_label.configure(fg_color="#800000") # Maroon background if no image
 
     def create_login_frame(self):
+        # Remove any existing widgets except the background
         for widget in self.root.winfo_children():
             if widget != self.bg_label:
                 widget.destroy()
@@ -51,39 +65,39 @@ class ProjectorReservationSystem:
                                         border_width=2,
                                         corner_radius=10,
                                         width=350,
-                                        height=250)
+                                        height=280) # Increased height slightly
         self.login_frame.place(relx=0.5, rely=0.5, anchor="center")
 
         ctk.CTkLabel(
             self.login_frame,
             text="Projector Reservation System",
-            font=("Arial", 16, "bold"),
+            font=("Arial", 18, "bold"), # Increased font size
             text_color="white"
         ).place(relx=0.5, rely=0.15, anchor="center")
 
         ctk.CTkLabel(self.login_frame,
                      text="Username:",
                      text_color="white",
-                     font=("Arial", 12)
-                     ).place(x=30, y=60)
-        self.username_entry = ctk.CTkEntry(self.login_frame, font=("Arial", 12), width=200)
-        self.username_entry.place(x=120, y=60)
+                     font=("Arial", 14) # Increased font size
+                     ).place(x=30, y=80) # Adjusted y
+        self.username_entry = ctk.CTkEntry(self.login_frame, font=("Arial", 14), width=200)
+        self.username_entry.place(x=120, y=80)
 
         ctk.CTkLabel(self.login_frame,
                      text="Password:",
                      text_color="white",
-                     font=("Arial", 12)
-                     ).place(x=30, y=100)
-        self.password_entry = ctk.CTkEntry(self.login_frame, show="*", font=("Arial", 12), width=200)
-        self.password_entry.place(x=120, y=100)
+                     font=("Arial", 14) # Increased font size
+                     ).place(x=30, y=130) # Adjusted y
+        self.password_entry = ctk.CTkEntry(self.login_frame, show="*", font=("Arial", 14), width=200)
+        self.password_entry.place(x=120, y=130)
 
-        self.error_label = ctk.CTkLabel(self.login_frame, text="", text_color="red", font=("Arial", 10))
-        self.error_label.place(relx=0.5, rely=0.85, anchor="center")
+        self.error_label = ctk.CTkLabel(self.login_frame, text="", text_color="red", font=("Arial", 12))
+        self.error_label.place(relx=0.5, rely=0.88, anchor="center") # Adjusted y
 
         login_button = ctk.CTkButton(
             self.login_frame,
             text="Login",
-            font=("Arial", 12, "bold"),
+            font=("Arial", 14, "bold"),
             fg_color="yellow",
             text_color="black",
             command=self.login
@@ -95,337 +109,44 @@ class ProjectorReservationSystem:
         password = self.password_entry.get()
 
         if username == "admin" and password == "admin":
+            # Admin login
             self.login_frame.destroy()
-            self.show_dashboard()
+            self.open_admin_dashboard(username)
         else:
-            self.error_label.configure(text="Invalid credentials!")
+            # Try student login
+            stored_password = self.db.get_student_credentials(username)
+            if stored_password and stored_password == password:
+                self.login_frame.destroy()
+                self.open_student_dashboard(username)
+            else:
+                self.error_label.configure(text="Invalid credentials!")
 
-    def show_dashboard(self):
-        self.dashboard = ctk.CTkFrame(self.root, fg_color="white", border_width=2, corner_radius=10)
-        self.dashboard.place(relx=0.5, rely=0.5, anchor="center")
+    def open_admin_dashboard(self, admin_name):
+        # Create a new Toplevel window for the admin dashboard
+        admin_win = ctk.CTkToplevel(self.root)
+        # Pass the DBManager instance to the dashboard
+        AdminDashboard(admin_win, admin_name, self.db)
+        # Hide the main window if you want the dashboard to be the only visible window
+        # self.root.withdraw()
+        # To show main window again when dashboard closes:
+        admin_win.protocol("WM_DELETE_WINDOW", lambda: self.on_dashboard_close(admin_win))
 
-        self.welcome_label = ctk.CTkLabel(
-            self.dashboard,
-            text="Welcome to PRS (Projector Reservation System), Admin!",
-            font=("Arial", 16, "bold"),
-            text_color="black"
-        )
-        self.welcome_label.pack(padx=20, pady=40)
+    def open_student_dashboard(self, student_name):
+        # Create a new Toplevel window for the student dashboard
+        student_win = ctk.CTkToplevel(self.root)
+        # Pass the DBManager instance and student name to the dashboard
+        StudentDashboard(student_win, student_name, self.db)
+        # Hide the main window if you want the dashboard to be the only visible window
+        # self.root.withdraw()
+        # To show main window again when dashboard closes:
+        student_win.protocol("WM_DELETE_WINDOW", lambda: self.on_dashboard_close(student_win))
 
-        self.root.after(2000, self.show_main_interface)
-
-    def show_main_interface(self):
-        if self.dashboard:
-            self.dashboard.destroy()
-            self.dashboard = None
-
-        self.main_frame = ctk.CTkFrame(self.root, fg_color="white", corner_radius=15)
-        self.main_frame.pack(expand=True, fill="both", padx=30, pady=30)
-
-        self.create_date_dropdown()
-        self.create_table()
-        self.create_buttons()
-
-    def create_date_dropdown(self):
-        date_frame = ctk.CTkFrame(self.main_frame, fg_color="white")
-        date_frame.pack(fill="x", padx=20, pady=(10, 0))
-
-        ctk.CTkLabel(
-            date_frame,
-            text="Select Date:",
-            font=("Arial", 14, "bold"),
-            text_color="black"
-        ).pack(side="right", padx=(0, 10))
-
-        date_list = ["May 7, 2025", "May 8, 2025", "May 9, 2025", "May 10, 2025", "May 11, 2025"]
-        self.date_dropdown = ctk.CTkOptionMenu(date_frame, values=date_list, width=150)
-        self.date_dropdown.pack(side="right", padx=(0, 20))
-
-    def create_table(self):
-        headers = ["PR. NO.", "SERIAL NO.", "TIME", "PROFESSOR", "SECTION", "REPRESENTATIVE", "STATUS"]
-
-        self.table_frame = ctk.CTkFrame(self.main_frame, fg_color="white", border_width=2, corner_radius=10)
-        self.table_frame.pack(padx=20, pady=20, fill="x")
-
-        for widget in self.table_frame.winfo_children():
-            widget.destroy()
-
-        for col_index, header in enumerate(headers):
-            ctk.CTkLabel(
-                self.table_frame,
-                text=header,
-                font=("Arial", 14, "bold"),
-                text_color="black",
-                fg_color="#e6e6e6",
-                width=120,
-                height=30
-            ).grid(row=0, column=col_index, padx=1, pady=1, sticky="nsew")
-
-        for i in range(5):
-            for col in range(len(headers)):
-                ctk.CTkLabel(
-                    self.table_frame,
-                    text="",
-                    font=("Arial", 13),
-                    text_color="black",
-                    width=120,
-                    height=30,
-                    fg_color="white"
-                ).grid(row=i + 1, column=col, padx=1, pady=1, sticky="nsew")
-
-
-        for col in range(len(headers)):
-            self.table_frame.grid_columnconfigure(col, weight=1)
-
-    def populate_table_with_data(self, data_rows):
-        """Populates the main interface table with data from the database."""
-        for widget in self.table_frame.winfo_children():
-            if widget.grid_info()['row'] > 0:
-                widget.destroy()
-
-        headers = ["PR. NO.", "SERIAL NO.", "TIME", "PROFESSOR", "SECTION", "REPRESENTATIVE", "STATUS"]
-        for row_index, row_data in enumerate(data_rows, start=1):
-            for col_index, cell in enumerate(row_data):
-                ctk.CTkLabel(
-                    self.table_frame,
-                    text=str(cell),
-                    font=("Arial", 13),
-                    text_color="black",
-                    width=120,
-                    height=30,
-                    fg_color="white"
-                ).grid(row=row_index, column=col_index, padx=1, pady=1, sticky="nsew")
-
-        num_data_rows = len(data_rows)
-        if num_data_rows < 5:
-            for i in range(num_data_rows, 5):
-                for col in range(len(headers)):
-                    ctk.CTkLabel(
-                        self.table_frame,
-                        text="",
-                        font=("Arial", 13),
-                        text_color="black",
-                        width=120,
-                        height=30,
-                        fg_color="white"
-                    ).grid(row=i + 1, column=col, padx=1, pady=1, sticky="nsew")
-
-
-    def create_buttons(self):
-        button_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        button_frame.pack(pady=10)
-
-        button_style = {
-            "font": ("Arial", 13, "bold"),
-            "fg_color": "#800000",
-            "hover_color": "#990000",
-            "text_color": "white",
-            "corner_radius": 15,
-            "width": 140
-        }
-
-        ctk.CTkButton(
-            button_frame,
-            text="ADD",
-            command=self.open_add_window,
-            **button_style
-        ).grid(row=0, column=0, padx=10, pady=5)
-
-        ctk.CTkButton(
-            button_frame,
-            text="RESERVATION",
-            command=self.open_reservation_window,
-            **button_style
-        ).grid(row=0, column=1, padx=10, pady=5)
-
-        ctk.CTkButton(
-            button_frame,
-            text="CANCELLATION",
-            command=self.open_cancellation_window,
-            **button_style
-        ).grid(row=0, column=2, padx=10, pady=5)
-
-        ctk.CTkButton(
-            button_frame,
-            text="VIEW",
-            command=self.open_view_window,
-            **button_style
-        ).grid(row=0, column=3, padx=10, pady=5)
-
-    def open_add_window(self):
-        add_window = ctk.CTkToplevel(self.root)
-        add_window.title("Add Projector Reservation")
-        add_window.geometry("400x300")
-        add_window.configure(fg_color="white")
-        add_window.grab_set()
-
-        ctk.CTkLabel(
-            add_window,
-            text="Add New Projector",
-            font=("Arial", 16, "bold"),
-            text_color="black"
-        ).pack(pady=10)
-
-        self.add_entries = {}
-        fields = [
-            ("PR. NO.",  "pr_no"),
-            ("Serial No.", "serial_no"),
-        ]
-
-        for label_text, key in fields:
-            ctk.CTkLabel(add_window, text=label_text, text_color="black", anchor="w", font=("Arial", 12)
-                         ).pack(pady=(10, 0), padx=20, anchor="w")
-            entry = ctk.CTkEntry(add_window, width=300)
-            entry.pack(padx=20)
-            self.add_entries[key] = entry
-
-        ctk.CTkButton(
-            add_window,
-            text="Save",
-            fg_color="#800000",
-            text_color="white",
-            command=lambda: self.save_new_entry(add_window)
-        ).pack(pady=20)
-
-    def save_new_entry(self, add_window):
-        pr_no = self.add_entries["pr_no"].get().strip()
-        serial_no = self.add_entries["serial_no"].get().strip()
-
-        if not pr_no or not serial_no:
-            print("PR. NO. and Serial No. are required.")
-            ctk.CTkMessagebox.showerror("Input Error", "PR. NO. and Serial No. are required.")
-            return
-
-        if self.db.add_projector_entry(pr_no, serial_no):
-            print(f"New projector {pr_no} added successfully.")
-            ctk.CTkMessagebox.showinfo("Success", f"Projector {pr_no} added successfully.")
-            add_window.destroy()
-            self.open_view_window()
-        else:
-            print(f"Failed to add projector {pr_no}.")
-            ctk.CTkMessagebox.showerror("Database Error", "Failed to add projector. Check database connection or if PR. NO. already exists.")
-
-    def open_reservation_window(self):
-        res_window = ctk.CTkToplevel(self.root)
-        res_window.title("Make a Reservation")
-        res_window.geometry("400x450")
-        res_window.configure(fg_color="white")
-        res_window.grab_set()
-
-        ctk.CTkLabel(
-            res_window,
-            text="Make a Reservation",
-            font=("Arial", 16, "bold"),
-            text_color="black"
-        ).pack(pady=10)
-
-        available_list = self.db.get_available_projector_nos()
-        if not available_list:
-            ctk.CTkLabel(res_window, text="No available projectors found.", text_color="red").pack(pady=10)
-            return
-
-        ctk.CTkLabel(res_window, text="Select Projector (PR. NO.):", text_color="black", anchor="w", font=("Arial", 12)
-                     ).pack(pady=(10, 0), padx=20, anchor="w")
-        self.res_pr_dropdown = ctk.CTkOptionMenu(res_window, values=available_list, width=200)
-        self.res_pr_dropdown.pack(pady=(5, 15))
-
-        self.res_entries = {}
-        fields = [
-            ("Time", "time_slot"),
-            ("Professor", "professor"),
-            ("Section", "section"),
-            ("Representative", "representative")
-        ]
-        for label_text, key in fields:
-            ctk.CTkLabel(res_window, text=label_text, text_color="black", anchor="w", font=("Arial", 12)
-                         ).pack(pady=(10, 0), padx=20, anchor="w")
-            entry = ctk.CTkEntry(res_window, width=300)
-            entry.pack(padx=20)
-            self.res_entries[key] = entry
-
-        ctk.CTkButton(
-            res_window,
-            text="Submit Reservation",
-            fg_color="#800000",
-            text_color="white",
-            command=lambda: self.submit_reservation(res_window)
-        ).pack(pady=20)
-
-    def submit_reservation(self, res_window):
-        pr_no = self.res_pr_dropdown.get()
-        time_slot = self.res_entries["time_slot"].get().strip()
-        professor = self.res_entries["professor"].get().strip()
-        section = self.res_entries["section"].get().strip()
-        representative = self.res_entries["representative"].get().strip()
-
-        if not all([pr_no, time_slot, professor, section, representative]):
-            print("All fields are required for reservation.")
-            ctk.CTkMessagebox.showerror("Input Error", "All fields are required for reservation.")
-            return
-
-        if self.db.update_reservation_details(pr_no, time_slot, professor, section, representative):
-            print(f"Projector {pr_no} reserved successfully.")
-            ctk.CTkMessagebox.showinfo("Success", f"Projector {pr_no} reserved successfully.")
-            res_window.destroy()
-            self.open_view_window()
-        else:
-            print(f"Failed to reserve projector {pr_no}.")
-            ctk.CTkMessagebox.showerror("Database Error", "Failed to reserve projector.")
-
-    def open_cancellation_window(self):
-        cancel_window = ctk.CTkToplevel(self.root)
-        cancel_window.title("Cancel Reservation")
-        cancel_window.geometry("350x250")
-        cancel_window.configure(fg_color="white")
-        cancel_window.grab_set()
-
-        ctk.CTkLabel(
-            cancel_window,
-            text="Cancel a Reservation",
-            font=("Arial", 16, "bold"),
-            text_color="black"
-        ).pack(pady=10)
-
-        reserved_list = self.db.get_reserved_projector_nos()
-        if not reserved_list:
-            ctk.CTkLabel(cancel_window, text="No reserved projectors found.", text_color="red").pack(pady=10)
-            return
-
-        ctk.CTkLabel(cancel_window, text="Select Projector (PR. NO.):", text_color="black", anchor="w", font=("Arial", 12)
-                     ).pack(pady=(10, 0), padx=20, anchor="w")
-        self.cancel_pr_dropdown = ctk.CTkOptionMenu(cancel_window, values=reserved_list, width=200)
-        self.cancel_pr_dropdown.pack(pady=(5, 15))
-
-        ctk.CTkButton(
-            cancel_window,
-            text="Cancel Reservation",
-            fg_color="#800000",
-            text_color="white",
-            command=lambda: self.submit_cancellation(cancel_window)
-        ).pack(pady=20)
-
-    def submit_cancellation(self, cancel_window):
-        pr_no = self.cancel_pr_dropdown.get()
-        if not pr_no:
-            print("Please select a projector to cancel.")
-            ctk.CTkMessagebox.showerror("Input Error", "Please select a projector to cancel.")
-            return
-
-        if self.db.cancel_projector_reservation(pr_no):
-            print(f"Reservation for {pr_no} has been cancelled.")
-            ctk.CTkMessagebox.showinfo("Success", f"Reservation for {pr_no} has been cancelled.")
-            cancel_window.destroy()
-            self.open_view_window()
-        else:
-            print(f"Failed to cancel reservation for {pr_no}.")
-            ctk.CTkMessagebox.showerror("Database Error", "Failed to cancel reservation.")
-
-    def open_view_window(self):
-
-        all_reservations = self.db.get_all_reservations()
-        if all_reservations:
-            self.populate_table_with_data(all_reservations)
-            print("Main table refreshed with current data.")
-        else:
-            self.populate_table_with_data([])
-            print("No reservations found to display.")
+    def on_dashboard_close(self, dashboard_window):
+        # This function is called when a dashboard window is closed
+        dashboard_window.destroy()
+        # Bring the main login window back to the foreground and clear entries
+        self.create_login_frame() # Recreate login frame
+        self.root.deiconify() # Show the main window if it was hidden
+        self.username_entry.delete(0, ctk.END)
+        self.password_entry.delete(0, ctk.END)
+        self.error_label.configure(text="") # Clear any previous error
