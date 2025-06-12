@@ -6,7 +6,7 @@ from PIL import Image, ImageTk
 import os
 import mysql.connector
 
-def open_admin_dashboard(admin_name):
+def open_student_dashboard(student_name):
     student_win = tk.Tk()
     student_win.title("Student Dashboard")
     student_win.geometry("1000x650")
@@ -99,7 +99,7 @@ def open_admin_dashboard(admin_name):
     scrollable_content_frame.pack_propagate(False)
     scrollable_content_frame.bind("<Configure>", lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all")))
 
-    canvas_window_id = main_canvas.create_window((main_canvas.winfo_width() / 2, 0), window=scrollable_content_frame, anchor="n")
+    canvas_window_id = main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
 
     def on_canvas_configure(event):
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
@@ -120,7 +120,7 @@ def open_admin_dashboard(admin_name):
 
 
     # --- UI Element Definitions (All elements go into scrollable_content_frame) ---
-    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {admin_name}!", font=("Arial", 18, "bold"))
+    welcome_label = ttk.Label(scrollable_content_frame, text=f"Welcome, {student_name}!", font=("Arial", 18, "bold"))
     welcome_label.pack(pady=(15, 10), padx=20)
 
     notebook = ttk.Notebook(scrollable_content_frame)
@@ -195,7 +195,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
@@ -245,7 +245,7 @@ def open_admin_dashboard(admin_name):
         if not db: return
         cursor = db.cursor()
         try:
-            cursor.execute("SELECT student_id FROM students WHERE name = %s", (admin_name,))
+            cursor.execute("SELECT student_id FROM students WHERE name = %s", (student_name,))
             result = cursor.fetchone()
             if not result:
                 messagebox.showerror("Error", "Student not found in database.")
