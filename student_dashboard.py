@@ -36,14 +36,14 @@ def open_student_dashboard(student_name):
     student_win.bind('<Configure>', update_background_image)
     student_win.after(100, update_background_image) # Initial call
 
-    # --- Main Layout Frame (using grid) ---
-    main_layout_frame = tk.Frame(student_win, bg="transparent")
-    main_layout_frame.pack(fill='both', expand=True)
+    # --- Main Layout Frame (using tk.Frame, not ttk.Frame) ---
+    main_layout_frame = tk.Frame(student_win, bg="white")
+    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20)
     main_layout_frame.grid_rowconfigure(0, weight=1)
     main_layout_frame.grid_columnconfigure(0, weight=1)
 
     # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0)
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="white")
     main_canvas.grid(row=0, column=0, sticky="nsew")
 
     v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
@@ -53,7 +53,7 @@ def open_student_dashboard(student_name):
 
     main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
-    scrollable_content_frame = ttk.Frame(main_canvas, padding="20")
+    scrollable_content_frame = tk.Frame(main_canvas, padding="20", bg="white")
     main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
 
     def on_frame_configure(event):
@@ -267,6 +267,7 @@ def open_student_dashboard(student_name):
                     cursor_for_combo.close()
                     db_conn_for_combo.close()
 
+
         except mysql.connector.Error as err:
             messagebox.showerror("Database Error", str(err))
         finally:
@@ -316,6 +317,11 @@ def open_student_dashboard(student_name):
         if not hasattr(student_win, 'original_bg_image'):
             student_win.configure(bg=root_bg)
 
+        # Update backgrounds for Tkinter widgets (non-ttk)
+        main_layout_frame.configure(bg=root_bg)
+        scrollable_content_frame.configure(bg=frame_bg)
+        main_canvas.configure(background=frame_bg)
+
         style = ttk.Style()
         style.theme_use('clam')
 
@@ -343,8 +349,6 @@ def open_student_dashboard(student_name):
         style.map("Dark.TButton", background=[('active', "#777777" if not is_dark_mode else "#5a6268")])
 
         welcome_label.configure(background=frame_bg, foreground=fg_color)
-        main_canvas.configure(background=frame_bg)
-        main_canvas.update_idletasks()
 
         db = connect_db()
         if db:

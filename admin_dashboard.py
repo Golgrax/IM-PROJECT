@@ -11,7 +11,7 @@ def open_admin_dashboard(admin_name):
     admin_win.geometry("1200x700")
     admin_win.minsize(900, 600)
 
-    # --- Background Image Management (placed early as it affects root window) ---
+    # --- Background Image Management ---
     base_path = os.path.dirname(os.path.abspath(__file__))
     bg_image_path = os.path.join(base_path, "IMAGE", "background.png")
 
@@ -21,7 +21,7 @@ def open_admin_dashboard(admin_name):
         bg_label = tk.Label(admin_win)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
     except FileNotFoundError:
-        admin_win.configure(bg="#800000") # Fallback to PUP maroon
+        admin_win.configure(bg="#800000") # Fallback to PUP maroon if image missing
 
     def update_background_image(event=None):
         if hasattr(admin_win, 'original_bg_image') and bg_label:
@@ -31,19 +31,23 @@ def open_admin_dashboard(admin_name):
                 resized_image = admin_win.original_bg_image.resize((width, height), Image.LANCZOS)
                 admin_win.bg_photo_image = ImageTk.PhotoImage(resized_image)
                 bg_label.configure(image=admin_win.bg_photo_image)
+                # No need to assign bg_label.image again, admin_win.bg_photo_image keeps reference
 
     admin_win.bind('<Configure>', update_background_image)
     admin_win.after(100, update_background_image) # Initial call
 
-    # --- Main Layout Frame (using grid) ---
+    # --- Main Layout Frame (using tk.Frame, not ttk.Frame) ---
     # This frame holds the canvas + scrollbars and the bottom control frame
-    main_layout_frame = tk.Frame(admin_win, bg="transparent") # Use a tk.Frame here, it supports 'bg' and is transparent
-    main_layout_frame.pack(fill='both', expand=True)
-    main_layout_frame.grid_rowconfigure(0, weight=1) # Canvas row expands
-    main_layout_frame.grid_columnconfigure(0, weight=1) # Canvas column expands
+    # Set its background to match the content frames, not transparent,
+    # as its purpose is to create a contained area over the background image.
+    main_layout_frame = tk.Frame(admin_win, bg="white") # Start with a neutral background
+    main_layout_frame.pack(fill='both', expand=True, padx=20, pady=20) # Add some padding from window edges
+    main_layout_frame.grid_rowconfigure(0, weight=1)
+    main_layout_frame.grid_columnconfigure(0, weight=1)
 
     # --- Scrollable Content Setup ---
-    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0)
+    # Use a tk.Canvas as the scrollable viewport. Its background will be updated by theme.
+    main_canvas = tk.Canvas(main_layout_frame, highlightthickness=0, bg="white")
     main_canvas.grid(row=0, column=0, sticky="nsew")
 
     v_scrollbar = ttk.Scrollbar(main_layout_frame, orient="vertical", command=main_canvas.yview)
@@ -53,12 +57,15 @@ def open_admin_dashboard(admin_name):
 
     main_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
-    scrollable_content_frame = ttk.Frame(main_canvas, padding="20")
+    # Create a tk.Frame to put all content inside the canvas
+    # This frame also needs a background color for the theme
+    scrollable_content_frame = tk.Frame(main_canvas, padding="20", bg="white")
     main_canvas.create_window((0, 0), window=scrollable_content_frame, anchor="nw")
 
     def on_frame_configure(event):
         main_canvas.configure(scrollregion=main_canvas.bbox("all"))
         # Ensure scrollable_content_frame expands horizontally to fill canvas width
+        # The first child of canvas created by create_window is the actual frame
         main_canvas.itemconfig(main_canvas.winfo_children()[0], width=main_canvas.winfo_width())
 
     scrollable_content_frame.bind("<Configure>", on_frame_configure)
@@ -295,8 +302,10 @@ def open_admin_dashboard(admin_name):
         # PUP Theme Colors
         if mode == 'dark':
             root_bg = "#333333" # General dark background for window if no image
-            frame_bg = "#3A3A3A" # Dark grey for main content frames (simulates slight transparency)
-            label_frame_bg = "#555555" # Darker grey for labelframes
+            # frame_bg: for main content frames (scrollable_content_frame, notebook pages)
+            frame_bg = "#3A3A3A" # Slightly lighter than root_bg, for contrast on top of image
+            # label_frame_bg: for LabelFrames (Add Projector, Pending/Approved, Projector List, Manage Status)
+            label_frame_bg = "#555555" # Darker grey for labelframes (more contrast)
             fg_color = "white"
             heading_bg = "#666666" # Dark grey for treeview headers
             treeview_bg = "#555555"
@@ -309,7 +318,7 @@ def open_admin_dashboard(admin_name):
             info_button_bg = "#007bff" # Blue
         else: # Light mode (PUP inspired)
             root_bg = "#F0F0F0"
-            frame_bg = "white" # White for main content frames
+            frame_bg = "#FFFFFF" # White for main content frames
             label_frame_bg = "#E0E0E0" # Light grey for labelframes
             fg_color = "black"
             heading_bg = "#D0D0D0"
@@ -326,6 +335,11 @@ def open_admin_dashboard(admin_name):
         if not hasattr(admin_win, 'original_bg_image'):
             admin_win.configure(bg=root_bg)
 
+        # Update backgrounds for Tkinter widgets (non-ttk)
+        main_layout_frame.configure(bg=root_bg) # This frame holds everything
+        scrollable_content_frame.configure(bg=frame_bg) # The content frame inside canvas
+        main_canvas.configure(background=frame_bg) # Canvas background to match content frame
+
         # Configure ttk styles
         style = ttk.Style()
         style.theme_use('clam')
@@ -341,10 +355,9 @@ def open_admin_dashboard(admin_name):
         style.configure("TEntry", fieldbackground=frame_bg, foreground=fg_color)
         style.configure("TCombobox", fieldbackground=frame_bg, foreground=fg_color)
         style.configure("TCombobox.readonly", fieldbackground=frame_bg, foreground=fg_color)
-        style.configure("TNotebook", background=frame_bg) # Notebook background
-        style.configure("TNotebook.Tab", background=label_frame_bg, foreground=fg_color) # Tab background and text
+        style.configure("TNotebook", background=frame_bg)
+        style.configure("TNotebook.Tab", background=label_frame_bg, foreground=fg_color)
         style.map("TNotebook.Tab", background=[('selected', frame_bg)], foreground=[('selected', fg_color)])
-
 
         style.configure("Accent.TButton", background=accent_button_bg, foreground=accent_button_fg, font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Accent.TButton", background=[('active', "#A52A2A" if not is_dark_mode else "#218838")])
@@ -355,12 +368,11 @@ def open_admin_dashboard(admin_name):
         style.configure("Info.TButton", background=info_button_bg, foreground="white", font=("Arial", 10, "bold"), borderwidth=0)
         style.map("Info.TButton", background=[('active', "#1976D2" if not is_dark_mode else "#0069d9")])
 
-        # Manually update specific widgets
+        # Manually update specific non-ttk labels
         welcome_label.configure(background=frame_bg, foreground=fg_color)
-        main_canvas.configure(background=frame_bg) # Canvas background to match frame
-        main_canvas.update_idletasks()
 
-    # --- Theme Controls (created here as well) ---
+
+    # --- Theme Controls ---
     def toggle_theme():
         if is_dark_mode:
             apply_theme('light')
